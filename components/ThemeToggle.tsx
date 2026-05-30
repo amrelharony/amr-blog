@@ -1,34 +1,46 @@
 "use client";
 import { useEffect, useState } from "react";
 import { haptic } from "@/lib/haptics";
+import { type ThemeMode, getMode, setMode } from "@/lib/theme";
 
-// Dark/Light theme toggle — ported from applyTheme() in Js/site.js. Applies
-// `.light-mode` on <html>, persists to localStorage 'theme'. (The pre-paint inline
-// script in the layout sets the initial class to avoid a flash.)
+// Cycle button: auto → light → dark → auto. "auto" follows time of day (live, via
+// ThemeManager). Stores the mode in localStorage 'theme'; ThemeManager does the applying.
+const NEXT: Record<ThemeMode, ThemeMode> = { auto: "light", light: "dark", dark: "auto" };
+const ICON: Record<ThemeMode, string> = {
+  auto: "fa-circle-half-stroke",
+  light: "fa-sun",
+  dark: "fa-moon",
+};
+const LABEL: Record<ThemeMode, string> = {
+  auto: "Theme: Auto (by time of day)",
+  light: "Theme: Light",
+  dark: "Theme: Dark",
+};
+
 export default function ThemeToggle() {
-  const [light, setLight] = useState(false);
+  const [mode, setModeState] = useState<ThemeMode>("auto");
 
   useEffect(() => {
-    setLight(document.documentElement.classList.contains("light-mode"));
+    setModeState(getMode());
   }, []);
 
-  const toggle = () => {
-    const next = !light;
-    setLight(next);
-    const html = document.documentElement;
-    html.classList.toggle("light-mode", next);
-    html.classList.remove("lb-sepia");
-    try {
-      localStorage.setItem("theme", next ? "light" : "dark");
-    } catch {}
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", next ? "#f4f6fb" : "#06080f");
-    window.dispatchEvent(new CustomEvent("themechange", { detail: { light: next } }));
+  const cycle = () => {
+    const next = NEXT[mode];
+    setModeState(next);
+    setMode(next);
+    document.documentElement.classList.remove("lb-sepia");
+    window.dispatchEvent(new Event("thememodechange"));
     haptic.toggle();
   };
 
   return (
-    <button className="sc-btn" onClick={toggle} title="Toggle theme" aria-label="Toggle light/dark theme">
-      <i className={"fa-solid " + (light ? "fa-moon" : "fa-sun")} aria-hidden="true" />
+    <button
+      className={"sc-btn" + (mode === "auto" ? " active" : "")}
+      onClick={cycle}
+      title={LABEL[mode]}
+      aria-label={LABEL[mode]}
+    >
+      <i className={"fa-solid " + ICON[mode]} aria-hidden="true" />
     </button>
   );
 }

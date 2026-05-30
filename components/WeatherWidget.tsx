@@ -38,6 +38,7 @@ export default function WeatherWidget() {
         const cached = JSON.parse(localStorage.getItem(LS) || "null");
         if (cached && Date.now() - cached.ts < TTL) {
           setW(cached.data);
+          window.dispatchEvent(new CustomEvent("weatherupdate", { detail: cached.data }));
           return;
         }
       } catch {}
@@ -47,6 +48,7 @@ export default function WeatherWidget() {
         const c = j.current;
         const data = { temp: Math.round(c.temperature_2m), code: c.weather_code, isDay: c.is_day === 1 };
         setW(data);
+        window.dispatchEvent(new CustomEvent("weatherupdate", { detail: data }));
         try {
           localStorage.setItem(LS, JSON.stringify({ data, ts: Date.now() }));
         } catch {}

@@ -60,6 +60,113 @@
   height: 100%;
   display: block;
 }
+/* Time-of-day ambient gradient — subtle fixed layer behind content (with the particles). */
+#ambient-glow {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  transition: background 2s ease;
+}
+
+/* ── Custom cursor (glow + dot), ported from Js/site.js + Css/style.css. Recolors with
+   the weather accent via --glow/--accent. Hidden on touch devices. ── */
+.cg {
+  position: fixed;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9998;
+  background: radial-gradient(circle, var(--glow) 0%, transparent 70%);
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.cg.on {
+  opacity: 1;
+}
+.cd {
+  position: fixed;
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  transform: translate(-50%, -50%) scale(1);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background 0.25s, border 0.25s, opacity 0.25s;
+  will-change: transform;
+}
+.cd.hov {
+  transform: translate(-50%, -50%) scale(7.33);
+  background: transparent;
+  border: 1.5px solid var(--accent);
+  opacity: 0.5;
+}
+@media (pointer: coarse) {
+  .cg,
+  .cd {
+    display: none !important;
+  }
+}
+
+/* ── Intro overlay (lighter custom intro) ── */
+#blog-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  clip-path: inset(0 0 0% 0);
+}
+.bi-inner {
+  width: min(440px, 84vw);
+  text-align: center;
+}
+.bi-word {
+  font-family: "JetBrains Mono", monospace;
+  font-size: clamp(9px, 3.2vw, 13px);
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-shadow: 0 0 18px var(--glowS);
+  min-height: 1.4em;
+  white-space: nowrap;
+}
+.bi-sweep {
+  height: 2px;
+  width: 100%;
+  margin: 14px auto 18px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  transform-origin: center;
+  transform: scaleX(0);
+}
+.bi-bar {
+  height: 2px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.bi-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--glowS);
+}
+.bi-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--sub);
+  text-transform: uppercase;
+}
 
 * {
   margin: 0;

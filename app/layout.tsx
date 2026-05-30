@@ -5,12 +5,17 @@ import SiteControls from "@/components/SiteControls";
 import ParticleBackground from "@/components/ParticleBackground";
 import HolidayEngine from "@/components/HolidayEngine";
 import Mascot from "@/components/Mascot";
+import ThemeManager from "@/components/ThemeManager";
+import AmbientColor from "@/components/AmbientColor";
+import CustomCursor from "@/components/CustomCursor";
+import Intro from "@/components/Intro";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://blog.amrelharony.com";
 
 // Pre-paint theme: set .light-mode on <html> before React hydrates (no flash).
 // Default by time-of-day if no saved preference (mirrors the main site).
-const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('theme');if(!t){var h=new Date().getHours();t=(h>=6&&h<18)?'light':'dark';}if(t==='light')document.documentElement.classList.add('light-mode');}catch(e){}})();`;
+// Tri-state theme ('auto' | 'light' | 'dark'); 'auto'/unset → time-of-day. Pre-paint, no flash.
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('theme');var light;if(t==='light')light=true;else if(t==='dark')light=false;else{var h=new Date().getHours();light=(h>=6&&h<18);}if(light)document.documentElement.classList.add('light-mode');}catch(e){}})();`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -31,6 +36,12 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <noscript>
+          <style dangerouslySetInnerHTML={{ __html: "#blog-intro{display:none!important}" }} />
+        </noscript>
+        <Intro />
+        <ThemeManager />
+        <AmbientColor />
         <ParticleBackground />
         {/* React 19 hoists these <link> tags into <head>. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -45,6 +56,7 @@ export default function RootLayout({
         />
         {children}
         <SiteControls />
+        <CustomCursor />
         <HolidayEngine />
         <Mascot />
       </body>
