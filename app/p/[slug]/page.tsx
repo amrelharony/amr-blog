@@ -50,6 +50,8 @@ export default async function ArticlePage({ params }: Params) {
   if (!a) notFound();
 
   const html = renderArticleHtml(a.content);
+  const url = `${siteUrl}/p/${a.slug}`;
+  const shareText = a.title + (a.excerpt ? `\n\n${a.excerpt}` : "");
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -60,27 +62,175 @@ export default async function ArticlePage({ params }: Params) {
     dateModified: a.updated_at,
     ...(a.cover_image ? { image: a.cover_image } : {}),
     author: { "@type": "Person", name: "Amr Elharony", url: "https://amrelharony.com" },
-    mainEntityOfPage: `${siteUrl}/p/${a.slug}`,
+    mainEntityOfPage: url,
     ...(a.tags?.length ? { keywords: a.tags.join(", ") } : {}),
   };
 
   return (
-    <main className="lb-article" style={{ maxWidth: 760, margin: "0 auto", padding: "2rem 1rem" }}>
+    <div className="lb-wrap">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <Link href="/" className="lb-back" style={{ fontSize: ".85rem", opacity: 0.7 }}>
-        ← All writing
-      </Link>
-      <header className="lb-article-header" style={{ margin: "1rem 0 1.5rem" }}>
-        <h1 style={{ margin: "0 0 .5rem" }}>{a.title}</h1>
-        <div className="lb-article-meta" style={{ fontSize: ".85rem", opacity: 0.6 }}>
-          {fmtDate(a.created_at)} · {readingTime(a.content)} · {a.views} views
+      <nav className="lb-nav" role="navigation" aria-label="Article navigation">
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <Link className="lb-nav-back" href="/" role="link">
+            <i className="fa-solid fa-arrow-left" aria-hidden="true" /> <span>Articles</span>
+          </Link>
+          <span className="lb-nav-sep" aria-hidden="true" />
+          <Link className="lb-nav-brand" href="/" role="link">
+            AMR ELHARONY
+          </Link>
         </div>
-      </header>
-      {a.cover_image ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img className="lb-article-cover" src={a.cover_image} alt="" style={{ width: "100%", borderRadius: 10, marginBottom: "1.5rem" }} />
-      ) : null}
-      <article className="lb-article-body" dangerouslySetInnerHTML={{ __html: html }} />
-    </main>
+      </nav>
+
+      <div id="lbArticle" aria-live="polite">
+        <article
+          className="lb-article"
+          itemScope
+          itemType="https://schema.org/BlogPosting"
+          data-article-id={a.id}
+        >
+          <header className="lb-article-header">
+            <div className="lb-article-date lb-reveal">
+              <time dateTime={new Date(a.created_at).toISOString()} itemProp="datePublished">
+                {fmtDate(a.created_at)}
+              </time>
+            </div>
+            <h1 className="lb-article-h1 lb-reveal" itemProp="headline">
+              {a.title}
+            </h1>
+            {a.excerpt && (
+              <p className="lb-article-excerpt lb-reveal" itemProp="description">
+                {a.excerpt}
+              </p>
+            )}
+            <div className="lb-article-meta lb-reveal">
+              <span itemProp="author" itemScope itemType="https://schema.org/Person">
+                <meta itemProp="name" content="Amr Elharony" />
+                {readingTime(a.content)}
+              </span>
+              <span aria-label={`${a.views || 0} views`}>👁 {a.views || 0} views</span>
+            </div>
+          </header>
+
+          {a.cover_image && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              className="lb-cover-img lb-reveal"
+              src={a.cover_image}
+              alt={a.title}
+              itemProp="image"
+              fetchPriority="high"
+            />
+          )}
+
+          <div
+            className="lb-content has-dropcap"
+            itemProp="articleBody"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+
+          {(a.tags || []).length > 0 && (
+            <div className="lb-article-tags lb-reveal">
+              {a.tags.map((t) => (
+                <span key={t} className="lb-card-tag" itemProp="keywords">
+                  {t}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Reactions, comments, bookmark, TTS, copy-link, related/series — wired in later tasks */}
+          <footer className="lb-article-footer lb-reveal">
+            <div className="lb-share-panel">
+              <a
+                className="lb-share-icon twitter"
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(url)}`}
+                target="_blank"
+                rel="noopener"
+                title="Share on X"
+                aria-label="Share on X"
+              >
+                <i className="fa-brands fa-x-twitter" aria-hidden="true" />
+              </a>
+              <a
+                className="lb-share-icon linkedin"
+                href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`}
+                target="_blank"
+                rel="noopener"
+                title="Share on LinkedIn"
+                aria-label="Share on LinkedIn"
+              >
+                <i className="fa-brands fa-linkedin-in" aria-hidden="true" />
+              </a>
+              <a
+                className="lb-share-icon whatsapp"
+                href={`https://wa.me/?text=${encodeURIComponent(shareText + "\n\n" + url)}`}
+                target="_blank"
+                rel="noopener"
+                title="Share on WhatsApp"
+                aria-label="Share on WhatsApp"
+              >
+                <i className="fa-brands fa-whatsapp" aria-hidden="true" />
+              </a>
+              <a
+                className="lb-share-icon telegram"
+                href={`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(shareText)}`}
+                target="_blank"
+                rel="noopener"
+                title="Share on Telegram"
+                aria-label="Share on Telegram"
+              >
+                <i className="fa-brands fa-telegram" aria-hidden="true" />
+              </a>
+              <a
+                className="lb-share-icon email"
+                href={`mailto:?subject=${encodeURIComponent(a.title)}&body=${encodeURIComponent(shareText + "\n\n" + url)}`}
+                title="Share via Email"
+                aria-label="Share via Email"
+              >
+                <i className="fa-solid fa-envelope" aria-hidden="true" />
+              </a>
+            </div>
+          </footer>
+
+          <div className="lb-author-card lb-reveal">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="lb-author-avatar" src="/profile.jpg" alt="Amr Elharony" loading="lazy" />
+            <div className="lb-author-info">
+              <div className="lb-author-name">Amr Elharony</div>
+              <div className="lb-author-bio">
+                Delivery Lead, Mentor, FinTech Author &amp; Speaker — bridging banking and technology
+                to deliver measurable digital transformation across MENA.
+              </div>
+              <div className="lb-author-links">
+                <a
+                  className="lb-author-link"
+                  href="https://www.linkedin.com/in/amrmelharony"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <i className="fa-brands fa-linkedin-in" /> LinkedIn
+                </a>
+                <a
+                  className="lb-author-link"
+                  href="https://t.me/Amrmelharony"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <i className="fa-brands fa-telegram" /> Telegram
+                </a>
+                <a
+                  className="lb-author-link"
+                  href="https://adplist.org/mentors/amr-elharony"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <i className="fa-solid fa-calendar-check" /> ADPList
+                </a>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
   );
 }
