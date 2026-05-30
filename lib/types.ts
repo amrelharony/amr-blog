@@ -51,5 +51,5 @@ export interface Thought {
 
 export interface Poll {
   question: string;
-  options: { label: string; votes: number }[];
+  options: { text: string; votes: number }[];
 }
