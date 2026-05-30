@@ -79,14 +79,12 @@ export default function ArticleEngagement({
   const [name, setName] = useState("");
   const [text, setText] = useState("");
   const [posting, setPosting] = useState(false);
-  const [bookmarked, setBookmarked] = useState(false);
 
   // hydrate local state
   useEffect(() => {
     setMyRx(lsGet<Record<string, string[]>>("_lb_reactions", {})[articleId] || []);
     setLikedIds(lsGet<string[]>("_lb_comment_likes", []));
     setName(localStorage.getItem("_lb_commenter") || "");
-    setBookmarked(lsGet<string[]>("_lb_bookmarks", []).includes(slug));
   }, [articleId, slug]);
 
   // view increment, once per session
@@ -172,13 +170,6 @@ export default function ArticleEngagement({
     }
   };
 
-  const toggleBookmark = () => {
-    const bms = lsGet<string[]>("_lb_bookmarks", []);
-    const was = bms.includes(slug);
-    lsSet("_lb_bookmarks", was ? bms.filter((s) => s !== slug) : [...bms, slug]);
-    setBookmarked(!was);
-  };
-
   const tree = buildTree(comments);
   const activeRx = ARTICLE_RX.filter((r) => (reactions[r.key] || 0) > 0 || myRx.includes(r.key));
 
@@ -221,14 +212,6 @@ export default function ArticleEngagement({
             ))}
           </div>
         </span>
-        <button
-          className={"lb-bookmark-btn" + (bookmarked ? " active" : "")}
-          onClick={toggleBookmark}
-          style={{ marginLeft: "auto" }}
-        >
-          <i className={"fa-" + (bookmarked ? "solid" : "regular") + " fa-bookmark"} />{" "}
-          {bookmarked ? "Saved" : "Bookmark"}
-        </button>
       </div>
 
       <div id="lbCommentsSection">

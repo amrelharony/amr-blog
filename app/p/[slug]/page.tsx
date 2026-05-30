@@ -15,6 +15,7 @@ import ArticleEngagement from "@/components/ArticleEngagement";
 import TtsButton from "@/components/TtsButton";
 import ArticleToolbar from "@/components/ArticleToolbar";
 import ReadingTracker from "@/components/ReadingTracker";
+import CollectionsManager from "@/components/CollectionsManager";
 
 export const revalidate = 300;
 
@@ -254,6 +255,7 @@ export default async function ArticlePage({ params }: Params) {
                 <i className="fa-solid fa-envelope" aria-hidden="true" />
               </a>
               <TtsButton />
+              <CollectionsManager articleId={a.id} slug={a.slug} title={a.title} coverImage={a.cover_image || ""} />
             </div>
           </footer>
 
