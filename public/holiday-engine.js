@@ -438,7 +438,7 @@
       '</svg>';
 
     var container = injectSVG(svgStr);
-    container.style.cssText += 'top:16px;right:20px;opacity:0;';
+    container.style.cssText += 'top:58px;left:18px;opacity:0;';
 
     // Draw-on: set stroke-dasharray/offset, then animate to 0
     var paths = container.querySelectorAll('path, line');
