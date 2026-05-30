@@ -14,6 +14,7 @@ import ArticleReader from "@/components/ArticleReader";
 import ArticleEngagement from "@/components/ArticleEngagement";
 import TtsButton from "@/components/TtsButton";
 import ArticleToolbar from "@/components/ArticleToolbar";
+import ReadingTracker from "@/components/ReadingTracker";
 
 export const revalidate = 300;
 
@@ -299,6 +300,7 @@ export default async function ArticlePage({ params }: Params) {
       <ArticleAnimations />
       <ArticleReader />
       <ArticleToolbar minutes={Math.max(1, Math.ceil((a.content || "").split(/\s+/).filter(Boolean).length / 200))} />
+      <ReadingTracker articleId={a.id} slug={a.slug} title={a.title} coverImage={a.cover_image || ""} />
     </div>
   );
 }

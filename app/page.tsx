@@ -4,6 +4,7 @@ import { fmtDate } from "@/lib/format";
 import type { ArticleCard } from "@/lib/types";
 import FeedAnimations from "@/components/FeedAnimations";
 import NewsletterSignup from "@/components/NewsletterSignup";
+import ContinueReading from "@/components/ContinueReading";
 
 // ISR — feed revalidates every 5 min and on-demand via /api/revalidate (tag 'articles').
 export const revalidate = 300;
@@ -73,6 +74,8 @@ export default async function FeedPage() {
           ))}
         </div>
       )}
+
+      <ContinueReading />
 
       <main id="lbGrid" role="feed" aria-label="Article list">
         {articles.length === 0 ? (
