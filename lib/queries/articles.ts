@@ -65,6 +65,20 @@ export async function getRelatedArticles(article: {
   return pool.slice(0, 4);
 }
 
+/** Published articles carrying a given tag, newest first. */
+export async function getArticlesByTag(tag: string, limit = 50): Promise<ArticleCard[]> {
+  const sb = createPublicClient();
+  const { data, error } = await sb
+    .from("longform_articles")
+    .select(CARD_COLUMNS)
+    .eq("published", true)
+    .contains("tags", [tag])
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as ArticleCard[];
+}
+
 export interface SeriesSibling {
   id: string;
   title: string;
