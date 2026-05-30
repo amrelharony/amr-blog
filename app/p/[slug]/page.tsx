@@ -11,6 +11,7 @@ import { renderArticleHtml } from "@/lib/markdown/parse";
 import { fmtDate, readingTime } from "@/lib/format";
 import ArticleAnimations from "@/components/ArticleAnimations";
 import ArticleReader from "@/components/ArticleReader";
+import ArticleEngagement from "@/components/ArticleEngagement";
 
 export const revalidate = 300;
 
@@ -289,6 +290,7 @@ export default async function ArticlePage({ params }: Params) {
               </div>
             </div>
           </div>
+          <ArticleEngagement articleId={a.id} slug={a.slug} initialReactions={a.reactions || {}} />
         </article>
       </div>
       <ArticleAnimations />
