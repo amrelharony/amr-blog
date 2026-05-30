@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/newsletter/bulletin", "schedule": "0 9 1,15 * *" },
+    { "path": "/api/db-keepalive", "schedule": "0 6 */3 * *" }
+  ]
+}
