@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import { gsap } from "gsap";
 import { haptic } from "@/lib/haptics";
+import { ensureAnonSession } from "@/lib/supabase/anon";
 
 // 3D mascot (full Three.js) — loads the verbatim main-site modules from public/:
 //   askamr-api.js (chat contract) → ai3d-core.js (window._AI3D) → mascot-assistant.js
@@ -17,6 +18,7 @@ type MascotWindow = Window & {
   _peripheralsShown?: boolean;
   autoDismiss3D?: (...a: unknown[]) => void;
   cancelAutoDismiss?: (...a: unknown[]) => void;
+  _ensureChatAuth?: () => Promise<string | null>;
   requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
 };
 
@@ -37,6 +39,8 @@ export default function Mascot() {
     w._peripheralsShown = true;
     w.autoDismiss3D = w.autoDismiss3D || (() => {});
     w.cancelAutoDismiss = w.cancelAutoDismiss || (() => {});
+    // Chat auth bridge: askamr-api.js awaits this to establish the anon session cookie.
+    w._ensureChatAuth = w._ensureChatAuth || (() => ensureAnonSession());
 
     const loadSeq = (i: number) => {
       if (i >= SCRIPTS.length) return;
