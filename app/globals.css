@@ -81,3 +81,45 @@ img {
 .lb-content img {
   cursor: zoom-in;
 }
+
+/* ── Fixed site controls bar (theme · weather · audio) ── */
+.site-controls {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 1000;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.sc-btn {
+  height: 38px;
+  min-width: 38px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 14px;
+  font-family: "JetBrains Mono", monospace;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition: border-color 0.2s, color 0.2s;
+}
+.sc-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.sc-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.sc-weather {
+  font-size: 12px;
+  letter-spacing: 0.3px;
+}
