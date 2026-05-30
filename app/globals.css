@@ -1,40 +1,54 @@
+/* Design tokens ported from Css/style.css (:root + .light-mode) — blog.css depends on these. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #06080f;
+  --bg2: #0c1018;
+  --bg2-rgb: 12, 16, 24;
+  --text: #f0f2f5;
+  --sub: #8a95a8;
+  --accent: #00e1ff;
+  --accent2: #6366f1;
+  --accent3: #a855f7;
+  --card: rgba(12, 16, 24, 0.65);
+  --border: rgba(255, 255, 255, 0.08);
+  --cardH: rgba(255, 255, 255, 0.07);
+  --glow: rgba(0, 225, 255, 0.15);
+  --glowS: rgba(0, 225, 255, 0.4);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-html {
-  height: 100%;
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+.light-mode {
+  --bg: #f4f6fb;
+  --bg2: #fff;
+  --bg2-rgb: 255, 255, 255;
+  --text: #0a0f1a;
+  --sub: #5a6578;
+  --accent: #0066ff;
+  --accent2: #4f46e5;
+  --accent3: #9333ea;
+  --card: rgba(255, 255, 255, 0.7);
+  --border: rgba(0, 0, 0, 0.06);
+  --cardH: rgba(255, 255, 255, 0.95);
+  --glow: rgba(0, 102, 255, 0.08);
+  --glowS: rgba(0, 102, 255, 0.2);
 }
 
 * {
-  box-sizing: border-box;
-  padding: 0;
   margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
@@ -42,8 +56,6 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+img {
+  max-width: 100%;
 }
