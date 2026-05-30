@@ -31,6 +31,22 @@
   --glowS: rgba(0, 102, 255, 0.2);
 }
 
+/* Sepia reading theme (toggled from the article Reading Settings). */
+.lb-sepia {
+  --bg: #f4ecd8;
+  --bg2: #faf3e0;
+  --bg2-rgb: 250, 243, 224;
+  --text: #5b4636;
+  --sub: #7a6a53;
+  --card: rgba(250, 243, 224, 0.7);
+  --border: rgba(91, 70, 54, 0.14);
+  --cardH: rgba(250, 243, 224, 0.95);
+}
+.lb-sepia body {
+  background: var(--bg);
+  color: var(--text);
+}
+
 * {
   margin: 0;
   padding: 0;
