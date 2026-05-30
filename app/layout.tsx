@@ -4,6 +4,7 @@ import "./blog.css";
 import SiteControls from "@/components/SiteControls";
 import ParticleBackground from "@/components/ParticleBackground";
 import HolidayEngine from "@/components/HolidayEngine";
+import Mascot from "@/components/Mascot";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://blog.amrelharony.com";
 
@@ -45,6 +46,7 @@ export default function RootLayout({
         {children}
         <SiteControls />
         <HolidayEngine />
+        <Mascot />
       </body>
     </html>
   );
