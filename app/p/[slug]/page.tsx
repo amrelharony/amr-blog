@@ -12,6 +12,7 @@ import { fmtDate, readingTime } from "@/lib/format";
 import ArticleAnimations from "@/components/ArticleAnimations";
 import ArticleReader from "@/components/ArticleReader";
 import ArticleEngagement from "@/components/ArticleEngagement";
+import TtsButton from "@/components/TtsButton";
 
 export const revalidate = 300;
 
@@ -250,6 +251,7 @@ export default async function ArticlePage({ params }: Params) {
               >
                 <i className="fa-solid fa-envelope" aria-hidden="true" />
               </a>
+              <TtsButton />
             </div>
           </footer>
 
