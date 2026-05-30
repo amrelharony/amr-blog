@@ -41,20 +41,46 @@ export async function getAllPublishedSlugs(): Promise<string[]> {
   return (data ?? []).map((r: { slug: string }) => r.slug);
 }
 
-/** Articles sharing the most tags with the given one (parity: related list). */
-export async function getRelatedArticles(
-  current: ArticleCard,
-  limit = 3,
-): Promise<ArticleCard[]> {
+/**
+ * Related articles — mirrors renderRelated() in Js/blog-article.js: pull the 20
+ * most recent published (excluding current), rank by tag-overlap then views, top 4.
+ */
+export async function getRelatedArticles(article: {
+  id: string;
+  tags: string[];
+}): Promise<ArticleCard[]> {
   const sb = createPublicClient();
   const { data, error } = await sb
     .from("longform_articles")
     .select(CARD_COLUMNS)
     .eq("published", true)
-    .neq("slug", current.slug)
-    .overlaps("tags", current.tags?.length ? current.tags : ["__none__"])
-    .order("views", { ascending: false })
-    .limit(limit);
+    .neq("id", article.id)
+    .order("created_at", { ascending: false })
+    .limit(20);
   if (error) throw error;
-  return (data ?? []) as ArticleCard[];
+  const tags = article.tags || [];
+  const pool = (data ?? []) as ArticleCard[];
+  const overlap = (a: ArticleCard) => (a.tags || []).filter((t) => tags.includes(t)).length;
+  pool.sort((a, b) => overlap(b) - overlap(a) || (b.views || 0) - (a.views || 0));
+  return pool.slice(0, 4);
+}
+
+export interface SeriesSibling {
+  id: string;
+  title: string;
+  slug: string;
+  series_order: number;
+}
+
+/** All published articles in a series, ordered (for prev/next nav). */
+export async function getSeriesSiblings(seriesName: string): Promise<SeriesSibling[]> {
+  const sb = createPublicClient();
+  const { data, error } = await sb
+    .from("longform_articles")
+    .select("id,title,slug,series_order")
+    .eq("published", true)
+    .eq("series_name", seriesName)
+    .order("series_order", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as SeriesSibling[];
 }

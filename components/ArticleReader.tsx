@@ -1,0 +1,187 @@
+"use client";
+import { useEffect } from "react";
+import { esc, slugify } from "@/lib/format";
+
+// Reading-experience layer ported from Js/blog-article.js:
+// reading progress bar, table of contents (+ scrollspy), footnote hover tooltips,
+// and image lightbox — all operating on the server-rendered article DOM.
+export default function ArticleReader() {
+  useEffect(() => {
+    const cleanups: Array<() => void> = [];
+
+    // ── Reading progress bar ──
+    const bar = document.createElement("div");
+    bar.className = "lb-progress-bar";
+    const fill = document.createElement("div");
+    fill.className = "lb-progress-fill";
+    bar.appendChild(fill);
+    document.body.appendChild(bar);
+    const onScroll = () => {
+      const h = document.documentElement;
+      const max = h.scrollHeight - h.clientHeight;
+      fill.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + "%";
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    cleanups.push(() => {
+      window.removeEventListener("scroll", onScroll);
+      bar.remove();
+    });
+
+    const article = document.querySelector(".lb-article");
+    const content = document.querySelector(".lb-content") as HTMLElement | null;
+
+    // ── Table of contents + scrollspy ──
+    if (article && content) {
+      const headings = Array.from(content.querySelectorAll("h2, h3")) as HTMLElement[];
+      if (headings.length >= 2) {
+        const used: Record<string, number> = {};
+        const items = headings.map((h) => {
+          const text = (h.textContent || "").trim();
+          let base = h.id || slugify(text) || "section";
+          let id = base;
+          if (used[id]) {
+            used[id]++;
+            id = base + "-" + used[id];
+          } else used[id] = 1;
+          h.id = id;
+          return { id, text, depth: h.tagName === "H3" ? 3 : 2 };
+        });
+
+        const nav = document.createElement("nav");
+        nav.className = "lb-toc";
+        nav.setAttribute("aria-label", "Table of contents");
+        nav.innerHTML =
+          `<button class="lb-toc-toggle" aria-expanded="true">Contents (${items.length})</button>` +
+          '<ol class="lb-toc-list">' +
+          items
+            .map(
+              (it) =>
+                `<li class="lb-toc-item"><a class="lb-toc-link depth-${it.depth}" href="#${it.id}" data-toc-id="${it.id}">${esc(it.text)}</a></li>`,
+            )
+            .join("") +
+          "</ol>";
+        content.insertAdjacentElement("beforebegin", nav);
+
+        const toggle = nav.querySelector(".lb-toc-toggle")!;
+        toggle.addEventListener("click", () => {
+          nav.classList.toggle("collapsed");
+          toggle.setAttribute("aria-expanded", String(!nav.classList.contains("collapsed")));
+        });
+
+        const tocLinks = Array.from(nav.querySelectorAll<HTMLAnchorElement>(".lb-toc-link"));
+        tocLinks.forEach((link) => {
+          link.addEventListener("click", (e) => {
+            e.preventDefault();
+            const id = link.dataset.tocId!;
+            const target = document.getElementById(id);
+            if (target) {
+              target.scrollIntoView({ behavior: "smooth", block: "start" });
+              history.replaceState(null, "", "#" + id);
+            }
+          });
+        });
+
+        const spy = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                tocLinks.forEach((l) => l.classList.remove("active"));
+                nav.querySelector(`[data-toc-id="${entry.target.id}"]`)?.classList.add("active");
+              }
+            });
+          },
+          { rootMargin: "-10% 0px -80% 0px" },
+        );
+        headings.forEach((h) => spy.observe(h));
+        cleanups.push(() => {
+          spy.disconnect();
+          nav.remove();
+        });
+      }
+    }
+
+    // ── Footnote hover tooltips ──
+    document.querySelectorAll<HTMLElement>(".lb-fn-ref").forEach((ref) => {
+      ref.id = "fnref-" + ref.dataset.fn;
+      const enter = () => {
+        document.querySelector(".lb-footnote-tooltip")?.remove();
+        const tip = document.createElement("div");
+        tip.className = "lb-footnote-tooltip";
+        tip.textContent = ref.dataset.fnText || "";
+        document.body.appendChild(tip);
+        const rect = ref.getBoundingClientRect();
+        tip.style.left = Math.min(rect.left, window.innerWidth - 340) + "px";
+        tip.style.top = rect.bottom + window.scrollY + 6 + "px";
+      };
+      const leave = () => document.querySelector(".lb-footnote-tooltip")?.remove();
+      ref.addEventListener("mouseenter", enter);
+      ref.addEventListener("mouseleave", leave);
+    });
+    cleanups.push(() => document.querySelector(".lb-footnote-tooltip")?.remove());
+
+    // ── Image lightbox ──
+    const imgs = content ? (Array.from(content.querySelectorAll("img")) as HTMLImageElement[]) : [];
+    let box: HTMLElement | null = null;
+    let idx = 0;
+    const update = () => {
+      if (!box) return;
+      const im = imgs[idx];
+      (box.querySelector(".lb-lightbox-img") as HTMLImageElement).src = im.src;
+      (box.querySelector(".lb-lightbox-img") as HTMLImageElement).alt = im.alt || "";
+      const cap = box.querySelector(".lb-lightbox-caption") as HTMLElement;
+      cap.textContent = im.alt || "";
+      cap.style.display = im.alt ? "" : "none";
+      const counter = box.querySelector(".lb-lightbox-counter");
+      if (counter) counter.textContent = `${idx + 1} / ${imgs.length}`;
+    };
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+      else if (e.key === "ArrowLeft" && imgs.length > 1) { idx = (idx - 1 + imgs.length) % imgs.length; update(); }
+      else if (e.key === "ArrowRight" && imgs.length > 1) { idx = (idx + 1) % imgs.length; update(); }
+    };
+    const close = () => {
+      document.removeEventListener("keydown", keyHandler);
+      if (box) {
+        box.classList.remove("show");
+        const el = box;
+        setTimeout(() => el.remove(), 250);
+        box = null;
+      }
+    };
+    const open = (i: number) => {
+      idx = i;
+      box?.remove();
+      box = document.createElement("div");
+      box.className = "lb-lightbox";
+      box.innerHTML =
+        '<button class="lb-lightbox-close" title="Close">&times;</button>' +
+        (imgs.length > 1 ? `<span class="lb-lightbox-counter">${i + 1} / ${imgs.length}</span>` : "") +
+        '<img class="lb-lightbox-img" src="" alt="">' +
+        '<div class="lb-lightbox-caption"></div>' +
+        (imgs.length > 1
+          ? '<button class="lb-lightbox-nav lb-lightbox-prev" aria-label="Previous image">&#8249;</button><button class="lb-lightbox-nav lb-lightbox-next" aria-label="Next image">&#8250;</button>'
+          : "");
+      document.body.appendChild(box);
+      update();
+      requestAnimationFrame(() => box?.classList.add("show"));
+      box.querySelector(".lb-lightbox-close")!.addEventListener("click", close);
+      box.addEventListener("click", (e) => { if (e.target === box) close(); });
+      box.querySelector(".lb-lightbox-prev")?.addEventListener("click", (e) => { e.stopPropagation(); idx = (idx - 1 + imgs.length) % imgs.length; update(); });
+      box.querySelector(".lb-lightbox-next")?.addEventListener("click", (e) => { e.stopPropagation(); idx = (idx + 1) % imgs.length; update(); });
+      document.addEventListener("keydown", keyHandler);
+    };
+    imgs.forEach((img, i) => {
+      img.style.cursor = "zoom-in";
+      img.addEventListener("click", (e) => { e.stopPropagation(); open(i); });
+    });
+    cleanups.push(() => {
+      document.removeEventListener("keydown", keyHandler);
+      document.querySelector(".lb-lightbox")?.remove();
+    });
+
+    return () => cleanups.forEach((fn) => fn());
+  }, []);
+
+  return null;
+}

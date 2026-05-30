@@ -1,10 +1,16 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getArticleBySlug, getAllPublishedSlugs } from "@/lib/queries/articles";
+import {
+  getArticleBySlug,
+  getAllPublishedSlugs,
+  getRelatedArticles,
+  getSeriesSiblings,
+} from "@/lib/queries/articles";
 import { renderArticleHtml } from "@/lib/markdown/parse";
 import { fmtDate, readingTime } from "@/lib/format";
 import ArticleAnimations from "@/components/ArticleAnimations";
+import ArticleReader from "@/components/ArticleReader";
 
 export const revalidate = 300;
 
@@ -53,6 +59,16 @@ export default async function ArticlePage({ params }: Params) {
   const html = renderArticleHtml(a.content);
   const url = `${siteUrl}/p/${a.slug}`;
   const shareText = a.title + (a.excerpt ? `\n\n${a.excerpt}` : "");
+
+  const [related, siblings] = await Promise.all([
+    getRelatedArticles({ id: a.id, tags: a.tags || [] }),
+    a.series_name ? getSeriesSiblings(a.series_name) : Promise.resolve([]),
+  ]);
+  const seriesIdx = siblings.findIndex((s) => s.id === a.id);
+  const showSeries = siblings.length >= 2 && seriesIdx !== -1;
+  const seriesPrev = showSeries && seriesIdx > 0 ? siblings[seriesIdx - 1] : null;
+  const seriesNext = showSeries && seriesIdx < siblings.length - 1 ? siblings[seriesIdx + 1] : null;
+  const showRelated = related.length >= 2;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -123,6 +139,32 @@ export default async function ArticlePage({ params }: Params) {
             />
           )}
 
+          {showSeries && (
+            <div className="lb-series-nav">
+              {seriesPrev ? (
+                <Link className="lb-series-nav-btn" href={`/p/${seriesPrev.slug}`}>
+                  <i className="fa-solid fa-chevron-left" /> Prev
+                </Link>
+              ) : (
+                <span className="lb-series-nav-btn disabled">
+                  <i className="fa-solid fa-chevron-left" /> Prev
+                </span>
+              )}
+              <span className="lb-series-nav-title">
+                {a.series_name} — Part {seriesIdx + 1} of {siblings.length}
+              </span>
+              {seriesNext ? (
+                <Link className="lb-series-nav-btn" href={`/p/${seriesNext.slug}`}>
+                  Next <i className="fa-solid fa-chevron-right" />
+                </Link>
+              ) : (
+                <span className="lb-series-nav-btn disabled">
+                  Next <i className="fa-solid fa-chevron-right" />
+                </span>
+              )}
+            </div>
+          )}
+
           <div
             className="lb-content has-dropcap"
             itemProp="articleBody"
@@ -139,7 +181,24 @@ export default async function ArticlePage({ params }: Params) {
             </div>
           )}
 
-          {/* Reactions, comments, bookmark, TTS, copy-link, related/series — wired in later tasks */}
+          {showRelated && (
+            <div className="lb-related">
+              <div className="lb-related-title">RELATED ARTICLES</div>
+              <div className="lb-related-grid">
+                {related.map((r) => (
+                  <Link key={r.id} className="lb-related-card" href={`/p/${r.slug}`}>
+                    <div className="lb-related-card-title">{r.title}</div>
+                    <div className="lb-related-card-meta">
+                      <span>{fmtDate(r.created_at)}</span>
+                      {r.views ? <span>👁 {r.views}</span> : null}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Reactions, comments, bookmark, TTS, copy-link — wired in later tasks */}
           <footer className="lb-article-footer lb-reveal">
             <div className="lb-share-panel">
               <a
@@ -233,6 +292,7 @@ export default async function ArticlePage({ params }: Params) {
         </article>
       </div>
       <ArticleAnimations />
+      <ArticleReader />
     </div>
   );
 }
