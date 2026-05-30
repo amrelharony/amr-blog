@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getArticleBySlug, getAllPublishedSlugs } from "@/lib/queries/articles";
 import { renderArticleHtml } from "@/lib/markdown/parse";
 import { fmtDate, readingTime } from "@/lib/format";
+import ArticleAnimations from "@/components/ArticleAnimations";
 
 export const revalidate = 300;
 
@@ -231,6 +232,7 @@ export default async function ArticlePage({ params }: Params) {
           </div>
         </article>
       </div>
+      <ArticleAnimations />
     </div>
   );
 }

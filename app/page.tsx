@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getFeedArticles } from "@/lib/queries/articles";
 import { fmtDate } from "@/lib/format";
 import type { ArticleCard } from "@/lib/types";
+import FeedAnimations from "@/components/FeedAnimations";
 
 // ISR — feed revalidates every 5 min and on-demand via /api/revalidate (tag 'articles').
 export const revalidate = 300;
@@ -183,6 +184,7 @@ export default async function FeedPage() {
           </>
         )}
       </main>
+      <FeedAnimations />
     </div>
   );
 }
