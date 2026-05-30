@@ -59,3 +59,9 @@ a {
 img {
   max-width: 100%;
 }
+
+/* Lightbox-able images (cover + inline) — robust against GSAP clearProps. */
+.lb-cover-img,
+.lb-content img {
+  cursor: zoom-in;
+}

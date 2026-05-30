@@ -20,6 +20,9 @@ export default function ArticleReader() {
       const h = document.documentElement;
       const max = h.scrollHeight - h.clientHeight;
       fill.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + "%";
+      // .lb-progress-bar is opacity:0 until `.visible` (blog.css). Show it once
+      // the page is actually scrollable.
+      bar.classList.toggle("visible", max > 40);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
@@ -120,8 +123,12 @@ export default function ArticleReader() {
     });
     cleanups.push(() => document.querySelector(".lb-footnote-tooltip")?.remove());
 
-    // ── Image lightbox ──
-    const imgs = content ? (Array.from(content.querySelectorAll("img")) as HTMLImageElement[]) : [];
+    // ── Image lightbox (cover + any inline body images) ──
+    const cover = document.querySelector(".lb-cover-img") as HTMLImageElement | null;
+    const imgs: HTMLImageElement[] = [
+      ...(cover ? [cover] : []),
+      ...(content ? (Array.from(content.querySelectorAll("img")) as HTMLImageElement[]) : []),
+    ];
     let box: HTMLElement | null = null;
     let idx = 0;
     const update = () => {
@@ -172,7 +179,6 @@ export default function ArticleReader() {
       document.addEventListener("keydown", keyHandler);
     };
     imgs.forEach((img, i) => {
-      img.style.cursor = "zoom-in";
       img.addEventListener("click", (e) => { e.stopPropagation(); open(i); });
     });
     cleanups.push(() => {
