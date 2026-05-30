@@ -6,6 +6,7 @@ import FeedAnimations from "@/components/FeedAnimations";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import ContinueReading from "@/components/ContinueReading";
 import CollectionsStrip from "@/components/CollectionsStrip";
+import ReaderStats from "@/components/ReaderStats";
 
 // ISR — feed revalidates every 5 min and on-demand via /api/revalidate (tag 'articles').
 export const revalidate = 300;
@@ -76,6 +77,7 @@ export default async function FeedPage() {
         </div>
       )}
 
+      <ReaderStats />
       <ContinueReading />
       <CollectionsStrip />
 

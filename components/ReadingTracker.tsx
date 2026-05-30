@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import { ensureAnonSession } from "@/lib/supabase/anon";
+import { recordReadingDay } from "@/lib/reader-stats";
 
 // Reading-history tracker — ported from Js/blog-reader-data.js. Tracks scroll
 // progress + time on an article, persists to localStorage (_lb_reading_history),
@@ -69,6 +70,7 @@ export default function ReadingTracker({
       completed: (existing && existing.completed) || false,
     };
     set(h);
+    recordReadingDay();
 
     const curProgress = () => {
       const el = document.querySelector(".lb-article");
