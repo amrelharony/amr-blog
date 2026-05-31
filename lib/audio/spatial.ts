@@ -10,10 +10,12 @@ let enabled = false;
 let inited = false;
 
 function readEnabled(): boolean {
+  // Default ON: only off if the visitor explicitly muted it ("0").
+  // (Sound still can't play until the first user gesture — browser autoplay policy.)
   try {
-    return localStorage.getItem("audio_enabled") === "1";
+    return localStorage.getItem("audio_enabled") !== "0";
   } catch {
-    return false;
+    return true;
   }
 }
 
