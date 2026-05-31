@@ -1,78 +1,69 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
+import { getPhase } from "@/lib/weather-palette";
+import { selectVariation } from "@/lib/intro/select";
+import type { IntroCtx } from "@/lib/intro/types";
 
-// Lighter custom intro — a staged preloader bar + a signature wordmark scramble with an
-// accent sweep, then a clip-path wipe. Plays on every full load (root-layout mount =
-// once per hard load, not on soft navigations). Skippable; skipped under reduced-motion.
-// SSR-rendered so it covers content from first paint; a <noscript> rule hides it w/o JS.
-const STAGES = ["RESOLVING DNS", "ESTABLISHING TLS", "LOADING MODULES", "RENDERING INTERFACE", "READY"];
-const WORD = "THE BILINGUAL EXECUTIVE BLOG";
-const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/\\<>*#";
-
+// Intro SHELL/orchestrator. Owns the #blog-intro overlay, reduced-motion skip, skip
+// handlers, safety timeout, clip-path wipe, and the blog:intro-done event. Picks one of
+// several variations (different rendering tech) via the smart selector and runs it into
+// .intro-root. SSR-rendered so it covers content from first paint (content stays in the DOM
+// beneath → SEO intact; a <noscript> rule in layout.tsx hides it without JS).
 export default function Intro() {
   const [gone, setGone] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       setGone(true);
       return;
     }
-    const el = root.current;
-    if (!el) return;
-    const fill = el.querySelector(".bi-fill") as HTMLElement;
-    const pct = el.querySelector(".bi-pct") as HTMLElement;
-    const stage = el.querySelector(".bi-stage") as HTMLElement;
-    const word = el.querySelector(".bi-word") as HTMLElement;
-    const sweep = el.querySelector(".bi-sweep") as HTMLElement;
+    const root = rootRef.current;
+    const overlay = overlayRef.current;
+    if (!root || !overlay) return;
 
+    const cs = getComputedStyle(document.documentElement);
+    const v = (n: string, d: string) => cs.getPropertyValue(n).trim() || d;
+    const pal = {
+      accent: v("--accent", "#00e1ff"),
+      accent2: v("--accent2", "#6366f1"),
+      accent3: v("--accent3", "#a855f7"),
+      glow: v("--glow", "rgba(0,225,255,.15)"),
+      glowS: v("--glowS", "rgba(0,225,255,.4)"),
+    };
+    let weather: IntroCtx["weather"] = null;
+    try {
+      const c = JSON.parse(localStorage.getItem("cairoWeather") || "null");
+      if (c?.data && c.data.code !== undefined) weather = { code: c.data.code, isDay: !!c.data.isDay };
+    } catch {}
+    const webgl2 = (() => {
+      try {
+        return !!document.createElement("canvas").getContext("webgl2");
+      } catch {
+        return false;
+      }
+    })();
+    const ctx: IntroCtx = {
+      root,
+      pal,
+      phase: getPhase(),
+      weather,
+      desktop: window.matchMedia("(pointer:fine)").matches && window.innerWidth >= 900,
+      webgl2,
+      light: document.documentElement.classList.contains("light-mode"),
+    };
+
+    let cleanupVar: () => void = () => {};
     let finished = false;
-    const state = { p: 0 };
-
-    const tl = gsap.timeline();
-    tl.to(state, {
-      p: 100,
-      duration: 1.2,
-      ease: "power1.inOut",
-      onUpdate: () => {
-        const v = Math.round(state.p);
-        fill.style.width = v + "%";
-        pct.textContent = String(v);
-        stage.textContent = STAGES[Math.min(STAGES.length - 1, Math.floor((v / 100) * STAGES.length))];
-      },
-    });
-    tl.add(() => scramble(word, WORD, 0.9), "-=0.15");
-    tl.fromTo(sweep, { scaleX: 0, opacity: 0 }, { scaleX: 1, opacity: 1, duration: 0.5, ease: "power2.out" }, "-=0.75");
-    tl.to(sweep, { opacity: 0, duration: 0.3 }, "+=0.2");
-    tl.add(() => finish(), "+=0.1");
-
-    function scramble(node: HTMLElement, text: string, dur: number) {
-      const start = performance.now();
-      const total = dur * 1000;
-      const step = () => {
-        if (finished) {
-          node.textContent = text;
-          return;
-        }
-        const t = Math.min(1, (performance.now() - start) / total);
-        const revealed = Math.floor(t * text.length);
-        let out = "";
-        for (let i = 0; i < text.length; i++) {
-          out += i < revealed || text[i] === " " ? text[i] : GLYPHS[(Math.random() * GLYPHS.length) | 0];
-        }
-        node.textContent = out;
-        if (t < 1) requestAnimationFrame(step);
-        else node.textContent = text;
-      };
-      step();
-    }
-
-    function finish() {
+    const wipe = () => {
       if (finished) return;
       finished = true;
-      tl.kill();
-      gsap.to(el!, {
+      try {
+        cleanupVar();
+      } catch {}
+      gsap.to(overlay, {
         clipPath: "inset(0 0 100% 0)",
         duration: 0.7,
         ease: "power4.inOut",
@@ -81,17 +72,45 @@ export default function Intro() {
           window.dispatchEvent(new Event("blog:intro-done"));
         },
       });
+    };
+
+    let runRes: { done: Promise<void>; cleanup: () => void };
+    try {
+      runRes = selectVariation(ctx).run(ctx);
+    } catch (e) {
+      console.warn("[intro] variation failed:", e);
+      setGone(true);
+      return;
+    }
+    cleanupVar = runRes.cleanup;
+    // ?introhold freezes the intro (no auto-wipe / skip / safety) for inspection.
+    let hold = false;
+    try {
+      hold = new URLSearchParams(location.search).has("introhold");
+    } catch {}
+    if (hold) {
+      return () => {
+        try {
+          cleanupVar();
+        } catch {}
+      };
     }
 
-    const skip = () => finish();
+    runRes.done.then(() => {
+      if (!finished) wipe();
+    });
+
+    const skip = () => wipe();
     window.addEventListener("click", skip);
     window.addEventListener("wheel", skip, { passive: true });
     window.addEventListener("touchstart", skip, { passive: true });
     window.addEventListener("keydown", skip);
-    const safety = window.setTimeout(finish, 4500);
+    const safety = window.setTimeout(wipe, 6000);
 
     return () => {
-      tl.kill();
+      try {
+        cleanupVar();
+      } catch {}
       window.removeEventListener("click", skip);
       window.removeEventListener("wheel", skip);
       window.removeEventListener("touchstart", skip);
@@ -102,18 +121,8 @@ export default function Intro() {
 
   if (gone) return null;
   return (
-    <div ref={root} id="blog-intro" aria-hidden="true">
-      <div className="bi-inner">
-        <div className="bi-word">{WORD}</div>
-        <div className="bi-sweep" />
-        <div className="bi-bar">
-          <div className="bi-fill" />
-        </div>
-        <div className="bi-meta">
-          <span className="bi-stage">RESOLVING DNS</span>
-          <span className="bi-pct">0</span>
-        </div>
-      </div>
+    <div ref={overlayRef} id="blog-intro" aria-hidden="true">
+      <div ref={rootRef} className="intro-root" />
     </div>
   );
 }
