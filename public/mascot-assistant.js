@@ -1680,9 +1680,8 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
     // Collapse rapid double-clicks into one so the 2nd click doesn't re-toggle it closed.
     var now = Date.now();
     if (now - _lastChatClickTs > 400) {
-      var chatBubble = document.getElementById('amr-chat-bubble');
-      if (chatBubble) {
-        chatBubble.click();                              // external OpenCLA widget
+      if (window._toggleMascotChat) {
+        window._toggleMascotChat();                      // bespoke React chat panel
       } else {
         if (isOpen) closePanel(); else openPanel();      // built-in fallback panel
       }

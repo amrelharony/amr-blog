@@ -5,7 +5,7 @@ import SiteControls from "@/components/SiteControls";
 import ParticleBackground from "@/components/ParticleBackground";
 import HolidayEngine from "@/components/HolidayEngine";
 import Mascot from "@/components/Mascot";
-import ChatWidget from "@/components/ChatWidget";
+import MascotChat from "@/components/MascotChat";
 import ThemeManager from "@/components/ThemeManager";
 import AmbientColor from "@/components/AmbientColor";
 import CustomCursor from "@/components/CustomCursor";
@@ -34,7 +34,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <noscript>
@@ -60,7 +60,7 @@ export default function RootLayout({
         <CustomCursor />
         <HolidayEngine />
         <Mascot />
-        <ChatWidget />
+        <MascotChat />
       </body>
     </html>
   );

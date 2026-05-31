@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 const OPENCLAW_URL = process.env.OPENCLAW_URL || "https://chat.amrelharony.com/v1/chat/completions";
 const OPENCLAW_KEY = process.env.OPENCLAW_API_KEY || "";
-const OPENCLAW_MODEL = process.env.OPENCLAW_MODEL || "zai glm-5.1";
+const OPENCLAW_MODEL = process.env.OPENCLAW_MODEL || "openclaw";
 
 const MAX_MSG_LEN = 500;
 const MAX_HISTORY = 10;
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return json({ error: "Unauthorized" }, 401);
 
-  let body: { message?: string; history?: unknown };
+  let body: { message?: string; history?: unknown; pageContext?: string };
   try {
     body = await req.json();
   } catch {
@@ -88,6 +88,8 @@ export async function POST(req: NextRequest) {
     return json({ error: `Message required (max ${MAX_MSG_LEN} chars)` }, 400);
   }
   const history = validateHistory(body.history);
+  // Article-aware: the client passes the current post's title+excerpt when on /p/<slug>.
+  const pageContext = sanitize(body.pageContext || "").slice(0, 1200);
 
   // Rate limit. The live Connect RPCs take the (server-verified) user id explicitly:
   //   check_chat_rate_limit(p_user_id) · record_chat_usage(p_user_id, p_tokens, p_model)
@@ -120,10 +122,15 @@ export async function POST(req: NextRequest) {
     return json({ error: "Chat service not configured", fallback: true }, 503, rateLimitHeaders(limits));
   }
 
+  const parts: string[] = [];
+  if (pageContext) parts.push(`The user is currently reading this article on the blog:\n${pageContext}`);
+  if (context) parts.push(`Reference info about Amr:\n${context}`);
+  const userContent = parts.length ? `${parts.join("\n\n")}\n\nQuestion: ${message}` : message;
+
   const messages = [
     { role: "system", content: SYSTEM_PROMPT },
     ...history,
-    { role: "user", content: context ? `Context:\n${context}\n\nQuestion: ${message}` : message },
+    { role: "user", content: userContent },
   ];
 
   const controller = new AbortController();
