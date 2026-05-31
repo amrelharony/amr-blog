@@ -1667,26 +1667,40 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
   }
 
   // ── Click on mascot ──
+  // Debounce timestamp so a double-click can't toggle the chat open→closed
+  // (which looks like "nothing happened").
+  var _lastChatClickTs = 0;
   function onMascotClick(e) {
-    if (!mascotRoot || !raycaster || !renderer) return;
-    // Skip if this was a drag release
+    // Skip if this was a drag release (don't open chat right after dragging the mascot)
     if (interaction.drag.hasMoved) { interaction.drag.hasMoved = false; return; }
-    // Open external OpenCLA chat widget, fallback to built-in panel
-    var chatBubble = document.getElementById('amr-chat-bubble');
-    if (chatBubble) {
-      chatBubble.click();
-    } else {
-      if (isOpen) closePanel(); else openPanel();
+
+    // Open the chat — independent of whether the 3D model finished loading.
+    // (The 16MB GLB can still be downloading, may fail, or be skipped in
+    //  reduced-motion mode; the chat must work regardless.)
+    // Collapse rapid double-clicks into one so the 2nd click doesn't re-toggle it closed.
+    var now = Date.now();
+    if (now - _lastChatClickTs > 400) {
+      var chatBubble = document.getElementById('amr-chat-bubble');
+      if (chatBubble) {
+        chatBubble.click();                              // external OpenCLA widget
+      } else {
+        if (isOpen) closePanel(); else openPanel();      // built-in fallback panel
+      }
     }
+    _lastChatClickTs = now;
+
     // Track interaction sequences (multi-click Easter eggs)
     handleMascotInteraction();
-    // Also trigger a fun reaction
-    var reactions = ['spin', 'wiggle', 'excited'];
-    queueReaction(reactions[Math.floor(Math.random() * reactions.length)]);
-    triggerSquashStretch('bounce');
+
+    // 3D-only flourishes — only when the scene/model are actually ready
+    if (mascotRoot && raycaster && renderer) {
+      var reactions = ['spin', 'wiggle', 'excited'];
+      queueReaction(reactions[Math.floor(Math.random() * reactions.length)]);
+      triggerSquashStretch('bounce');
+      if (blinkPhase < 0) { blinkPhase = 0; nextBlinkTime = 1 + Math.random() * 3; }
+    }
     A.Haptic.pulse();
     playSound('click');
-    if (blinkPhase < 0) { blinkPhase = 0; nextBlinkTime = 1 + Math.random() * 3; }
     if (window.VDna && !clickXpAwarded) {
       window.VDna.addXp(1);
       clickXpAwarded = true;
@@ -3830,10 +3844,11 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
   }
 
   // Load Three.js + model right away (no waiting for click).
-  // Skip the heavy 16MB GLB on mobile/touch/narrow — emoji launcher + the same chat panel work there.
+  // Skip the heavy 16MB GLB on mobile/touch/narrow — emoji launcher + the chat widget work there.
   if (!A.RM && !A.isMobile && window.innerWidth >= 768) {
     loadThreeExtensions().then(function() {
       initScene(floatEl);
+      // Bump ?v= whenever /mascot.glb changes — it's cached immutably for 1 year (see vercel.json)
       return loadGLB('/mascot.glb', function(pct) {
         // Loading progress available if needed
       });

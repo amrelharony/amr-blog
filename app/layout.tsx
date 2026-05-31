@@ -5,6 +5,7 @@ import SiteControls from "@/components/SiteControls";
 import ParticleBackground from "@/components/ParticleBackground";
 import HolidayEngine from "@/components/HolidayEngine";
 import Mascot from "@/components/Mascot";
+import ChatWidget from "@/components/ChatWidget";
 import ThemeManager from "@/components/ThemeManager";
 import AmbientColor from "@/components/AmbientColor";
 import CustomCursor from "@/components/CustomCursor";
@@ -59,6 +60,7 @@ export default function RootLayout({
         <CustomCursor />
         <HolidayEngine />
         <Mascot />
+        <ChatWidget />
       </body>
     </html>
   );
