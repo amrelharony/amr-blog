@@ -5,12 +5,15 @@ import { useEffect } from "react";
 // The mascot opens it by clicking the (CSS-hidden) #amr-chat-bubble; styling lives in
 // globals.css (#amr-chat-* overrides). Ports the main site's thinking-dots indicator
 // (the widget's default typing is hidden via CSS) + close-on-outside-click.
-type ChatWin = Window & { AmrChatConfig?: { whatsappNumber: string | null }; gsap?: { to: (...a: unknown[]) => void } };
+type ChatWin = Window & { AmrChatConfig?: { whatsappNumber: string | null; apiUrl?: string }; gsap?: { to: (...a: unknown[]) => void } };
 
 export default function ChatWidget() {
   useEffect(() => {
     const w = window as ChatWin;
-    w.AmrChatConfig = w.AmrChatConfig || { whatsappNumber: null };
+    // Route the widget's API call through our same-origin proxy (the direct
+    // chat.amrelharony.com call is CORS-blocked from the blog's origin).
+    w.AmrChatConfig = w.AmrChatConfig || { whatsappNumber: null, apiUrl: "/api/openclaw" };
+    w.AmrChatConfig.apiUrl = "/api/openclaw";
     if (!document.getElementById("amr-chat-widget-script")) {
       const s = document.createElement("script");
       s.id = "amr-chat-widget-script";
