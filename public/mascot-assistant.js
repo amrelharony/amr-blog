@@ -3422,6 +3422,7 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
           floatEl.style.top = ny + 'px';
           floatEl.style.bottom = 'auto';
           floatEl.style.right = 'auto';
+          try { window.dispatchEvent(new CustomEvent('mascot:moved')); } catch (e) {}
           proceduralAnim.springs.headTilt.target = Math.max(-0.04, Math.min(0.04, dx * 0.0003));
           if (interaction.appearance.trailEnabled) spawnTrailDot(nx + floatEl.offsetWidth / 2, ny + floatEl.offsetHeight / 2);
         }
@@ -3462,6 +3463,15 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
   }
 
   function updatePanelPosition(corner) {
+    // Let the React chat panel (.bchat-panel) follow the mascot. The mascot glides to
+    // its snapped corner over ~0.3s, so emit a few times across that window to track it.
+    try {
+      var emit = function () { window.dispatchEvent(new CustomEvent('mascot:moved', { detail: { corner: corner } })); };
+      emit();
+      var t0 = Date.now();
+      var tick = function () { emit(); if (Date.now() - t0 < 360) requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+    } catch (e) {}
     if (!panel) return;
     panel.style.left = panel.style.right = panel.style.top = panel.style.bottom = 'auto';
     panel.style.transformOrigin = corner.replace(/([A-Z])/g, ' $1').toLowerCase();

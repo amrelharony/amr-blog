@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ensureAnonSession } from "@/lib/supabase/anon";
 import { getBrowserClient } from "@/lib/supabase/browser";
 
@@ -133,6 +133,64 @@ export default function MascotChat() {
       clearTimeout(dt);
       window.removeEventListener("keydown", onKey);
       document.removeEventListener("click", onDoc);
+    };
+  }, [open]);
+
+  // Anchor the panel to the mascot's live position (follows drag/snap) and clamp it
+  // fully on-screen — which also guarantees the input + footer are never clipped.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const panel = panelRef.current;
+      if (!panel) return;
+      const gap = 14;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      // Mobile renders a full-screen sheet via CSS (@media max-width:600px) — clear inline.
+      if (window.matchMedia("(max-width: 600px)").matches) {
+        panel.style.top = panel.style.left = panel.style.right = panel.style.bottom = panel.style.maxHeight = "";
+        return;
+      }
+      panel.style.maxHeight = vh - gap * 2 + "px";
+      const pw = panel.offsetWidth || 360;
+      const ph = panel.offsetHeight || 460;
+      const mascot = document.querySelector(".mascot-float") as HTMLElement | null;
+      const m = mascot ? mascot.getBoundingClientRect() : null;
+      let left: number;
+      let top: number;
+      // NB: .mascot-float is position:fixed, so offsetParent is always null — detect
+      // visibility via the rect's dimensions instead (0×0 when display:none/hidden).
+      if (m && m.width > 0 && m.height > 0) {
+        // Dock beside the mascot, on whichever side has room; align tops.
+        if (m.left + m.width / 2 < vw / 2) {
+          left = m.right + gap;
+          if (left + pw > vw - gap) left = m.left - gap - pw;
+        } else {
+          left = m.left - gap - pw;
+          if (left < gap) left = m.right + gap;
+        }
+        top = m.top;
+      } else {
+        left = vw - pw - 16;
+        top = 90;
+      }
+      left = Math.max(gap, Math.min(left, vw - pw - gap));
+      top = Math.max(gap, Math.min(top, vh - ph - gap));
+      panel.style.left = left + "px";
+      panel.style.top = top + "px";
+      panel.style.right = "auto";
+      panel.style.bottom = "auto";
+    };
+    place();
+    const raf = requestAnimationFrame(place); // re-place once the open animation settles
+    const t = setTimeout(place, 360);
+    window.addEventListener("mascot:moved", place);
+    window.addEventListener("resize", place);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+      window.removeEventListener("mascot:moved", place);
+      window.removeEventListener("resize", place);
     };
   }, [open]);
 
