@@ -3835,17 +3835,25 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
   }
 
   // Wait for peripherals (trophy bar, top buttons) to show, then reveal together
+  // Force the float visible — covers GSAP stalling (backgrounded tab) or the .mascot-float
+  // CSS opacity:0 never being cleared. Checks COMPUTED opacity (the 0 comes from the class).
+  function ensureVisible(delay) {
+    setTimeout(function() {
+      if (floatEl && parseFloat(getComputedStyle(floatEl).opacity || '1') < 0.05) floatEl.style.opacity = '1';
+    }, delay);
+  }
   if (window._peripheralsShown) {
     revealMascot();
+    ensureVisible(1800);
   } else {
     window.addEventListener('AmrOS:PeripheralsReady', revealMascot, { once: true });
-    // Safety fallback if event already fired or never fires
-    setTimeout(function() { if (floatEl && floatEl.style.opacity === '0') revealMascot(); }, 8000);
+    setTimeout(function() { if (floatEl && parseFloat(getComputedStyle(floatEl).opacity || '1') < 0.05) revealMascot(); }, 8000);
+    ensureVisible(9000);
   }
 
-  // Load Three.js + model right away (no waiting for click).
-  // Skip the heavy 16MB GLB on mobile/touch/narrow — emoji launcher + the chat widget work there.
-  if (!A.RM && !A.isMobile && window.innerWidth >= 768) {
+  // Load Three.js + model on all viewports (mobile included, like the main site).
+  // Only reduced-motion falls back to the emoji launcher. GLB is cached immutably (1yr).
+  if (!A.RM) {
     loadThreeExtensions().then(function() {
       initScene(floatEl);
       // Bump ?v= whenever /mascot.glb changes — it's cached immutably for 1 year (see vercel.json)

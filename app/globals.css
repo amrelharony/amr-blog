@@ -104,6 +104,12 @@
   border: 1.5px solid var(--accent);
   opacity: 0.5;
 }
+/* Guarantee the mascot is visible — overrides the injected .mascot-float{opacity:0} +
+   any stalled GSAP reveal (e.g. backgrounded tab), so it never gets stuck invisible. */
+.mascot-float {
+  opacity: 1 !important;
+}
+
 @media (pointer: coarse) {
   .cg,
   .cd {
