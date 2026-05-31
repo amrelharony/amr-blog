@@ -3829,8 +3829,9 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
     setTimeout(function() { if (floatEl && floatEl.style.opacity === '0') revealMascot(); }, 8000);
   }
 
-  // Load Three.js + model right away (no waiting for click)
-  if (!A.RM) {
+  // Load Three.js + model right away (no waiting for click).
+  // Skip the heavy 16MB GLB on mobile/touch/narrow — emoji launcher + the same chat panel work there.
+  if (!A.RM && !A.isMobile && window.innerWidth >= 768) {
     loadThreeExtensions().then(function() {
       initScene(floatEl);
       return loadGLB('/mascot.glb', function(pct) {

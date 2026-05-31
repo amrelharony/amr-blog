@@ -109,6 +109,10 @@
   .cd {
     display: none !important;
   }
+  /* Touch: no hover, so keep the chat launcher label visible for discoverability. */
+  .mascot-float-label {
+    opacity: 0.55 !important;
+  }
 }
 
 /* ── Intro overlay (lighter custom intro) ── */
