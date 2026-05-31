@@ -213,9 +213,9 @@
 #amr-chat-close:hover { color: rgba(255, 255, 255, 0.9) !important; }
 #amr-chat-messages { background: transparent !important; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.1) transparent; }
 .amr-msg { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important; }
-.amr-msg-bot { background: rgba(255, 255, 255, 0.08) !important; color: rgba(255, 255, 255, 0.85) !important; border: 1px solid rgba(255, 255, 255, 0.06) !important; box-shadow: none !important; backdrop-filter: blur(8px) !important; padding: 12px 16px !important; line-height: 1.5 !important; font-size: 13px !important; }
+.amr-msg-bot { background: rgba(38, 44, 58, 0.94) !important; color: rgba(255, 255, 255, 0.9) !important; border: 1px solid rgba(255, 255, 255, 0.08) !important; box-shadow: none !important; backdrop-filter: none !important; padding: 12px 16px !important; line-height: 1.5 !important; font-size: 13px !important; }
 .amr-msg-bot:empty { background: transparent !important; border: none !important; box-shadow: none !important; backdrop-filter: none !important; padding: 0 !important; min-height: 0 !important; }
-.amr-msg-user { background: rgba(0, 225, 255, 0.15) !important; color: rgba(255, 255, 255, 0.95) !important; border: 1px solid rgba(0, 225, 255, 0.2) !important; padding: 10px 16px !important; line-height: 1.5 !important; font-size: 13px !important; }
+.amr-msg-user { background: rgba(20, 96, 116, 0.94) !important; color: rgba(255, 255, 255, 0.96) !important; border: 1px solid rgba(0, 225, 255, 0.25) !important; padding: 10px 16px !important; line-height: 1.5 !important; font-size: 13px !important; }
 .amr-msg-typing { display: none !important; }
 #amr-chat-input-area { background: rgba(255, 255, 255, 0.05) !important; border-top: 1px solid rgba(255, 255, 255, 0.08) !important; padding: 10px 14px !important; }
 #amr-chat-input { background: rgba(255, 255, 255, 0.06) !important; border: 1px solid rgba(255, 255, 255, 0.1) !important; color: rgba(255, 255, 255, 0.9) !important; border-radius: 14px !important; font-size: 13px !important; }
@@ -234,8 +234,8 @@
 .light-mode #amr-chat-header-info p { color: #6366f1 !important; }
 .light-mode #amr-chat-header-avatar { background: rgba(99, 102, 241, 0.1) !important; border-color: rgba(99, 102, 241, 0.2) !important; }
 .light-mode #amr-chat-close { color: rgba(0, 0, 0, 0.4) !important; }
-.light-mode .amr-msg-bot { background: rgba(255, 255, 255, 0.6) !important; color: #1a2332 !important; border-color: rgba(0, 0, 0, 0.06) !important; }
-.light-mode .amr-msg-user { background: rgba(99, 102, 241, 0.12) !important; color: #1a2332 !important; border-color: rgba(99, 102, 241, 0.15) !important; }
+.light-mode .amr-msg-bot { background: rgba(233, 236, 242, 0.97) !important; color: #1a2332 !important; border-color: rgba(0, 0, 0, 0.08) !important; backdrop-filter: none !important; }
+.light-mode .amr-msg-user { background: rgba(214, 218, 250, 0.96) !important; color: #1a2332 !important; border-color: rgba(99, 102, 241, 0.22) !important; }
 .light-mode #amr-chat-input-area { background: rgba(255, 255, 255, 0.4) !important; border-color: rgba(0, 0, 0, 0.06) !important; }
 .light-mode #amr-chat-input { background: rgba(255, 255, 255, 0.7) !important; border-color: rgba(0, 0, 0, 0.1) !important; color: #1a2332 !important; }
 .light-mode #amr-chat-input::placeholder { color: rgba(0, 0, 0, 0.35) !important; }
