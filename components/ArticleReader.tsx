@@ -5,7 +5,11 @@ import { esc, slugify } from "@/lib/format";
 // Reading-experience layer ported from Js/blog-article.js:
 // reading progress bar, table of contents (+ scrollspy), footnote hover tooltips,
 // and image lightbox — all operating on the server-rendered article DOM.
-export default function ArticleReader() {
+// `slug` keys the effect: the App Router reuses this instance across /p/[slug]
+// navigations, so a bare [] dep would leave the TOC, lightbox, and footnote
+// tooltips wired to the *previous* article. Re-running rebuilds them (cleanups
+// below fully tear down the prior article's nodes + listeners first).
+export default function ArticleReader({ slug }: { slug: string }) {
   useEffect(() => {
     const cleanups: Array<() => void> = [];
 
@@ -105,6 +109,7 @@ export default function ArticleReader() {
     }
 
     // ── Footnote hover tooltips ──
+    const fnHandlers: Array<{ el: HTMLElement; enter: () => void; leave: () => void }> = [];
     document.querySelectorAll<HTMLElement>(".lb-fn-ref").forEach((ref) => {
       ref.id = "fnref-" + ref.dataset.fn;
       const enter = () => {
@@ -120,8 +125,15 @@ export default function ArticleReader() {
       const leave = () => document.querySelector(".lb-footnote-tooltip")?.remove();
       ref.addEventListener("mouseenter", enter);
       ref.addEventListener("mouseleave", leave);
+      fnHandlers.push({ el: ref, enter, leave });
     });
-    cleanups.push(() => document.querySelector(".lb-footnote-tooltip")?.remove());
+    cleanups.push(() => {
+      fnHandlers.forEach(({ el, enter, leave }) => {
+        el.removeEventListener("mouseenter", enter);
+        el.removeEventListener("mouseleave", leave);
+      });
+      document.querySelector(".lb-footnote-tooltip")?.remove();
+    });
 
     // ── Image lightbox (cover + any inline body images) ──
     const cover = document.querySelector(".lb-cover-img") as HTMLImageElement | null;
@@ -178,16 +190,20 @@ export default function ArticleReader() {
       box.querySelector(".lb-lightbox-next")?.addEventListener("click", (e) => { e.stopPropagation(); idx = (idx + 1) % imgs.length; update(); });
       document.addEventListener("keydown", keyHandler);
     };
+    const imgHandlers: Array<{ img: HTMLImageElement; h: (e: MouseEvent) => void }> = [];
     imgs.forEach((img, i) => {
-      img.addEventListener("click", (e) => { e.stopPropagation(); open(i); });
+      const h = (e: MouseEvent) => { e.stopPropagation(); open(i); };
+      img.addEventListener("click", h);
+      imgHandlers.push({ img, h });
     });
     cleanups.push(() => {
+      imgHandlers.forEach(({ img, h }) => img.removeEventListener("click", h));
       document.removeEventListener("keydown", keyHandler);
       document.querySelector(".lb-lightbox")?.remove();
     });
 
     return () => cleanups.forEach((fn) => fn());
-  }, []);
+  }, [slug]);
 
   return null;
 }

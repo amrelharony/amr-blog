@@ -91,7 +91,11 @@ export default async function ArticlePage({ params }: Params) {
 
   return (
     <div className="lb-wrap">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script
+        type="application/ld+json"
+        // Escape `<` so a title/excerpt containing "</script>" can't break out of the tag.
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
+      />
       <nav className="lb-nav" role="navigation" aria-label="Article navigation">
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <Link className="lb-nav-back" href="/" role="link">
@@ -300,8 +304,8 @@ export default async function ArticlePage({ params }: Params) {
           <ArticleEngagement articleId={a.id} slug={a.slug} initialReactions={a.reactions || {}} />
         </article>
       </div>
-      <ArticleAnimations />
-      <ArticleReader />
+      <ArticleAnimations slug={a.slug} />
+      <ArticleReader slug={a.slug} />
       <ArticleToolbar minutes={Math.max(1, Math.ceil((a.content || "").split(/\s+/).filter(Boolean).length / 200))} />
       <ReadingTracker articleId={a.id} slug={a.slug} title={a.title} coverImage={a.cover_image || ""} />
       <Annotations articleId={a.id} />
