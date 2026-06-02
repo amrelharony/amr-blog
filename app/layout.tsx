@@ -26,6 +26,21 @@ export const metadata: Metadata = {
   },
   description: "Articles and thoughts by Amr Elharony.",
   alternates: { canonical: "/", types: { "application/rss+xml": "/feed.xml" } },
+  // Defaults for pages that don't set their own (feed, thoughts, tags). The article
+  // route overrides openGraph/twitter with article-specific data.
+  openGraph: {
+    type: "website",
+    siteName: "Amr Elharony — Writing",
+    title: "Amr Elharony — Writing",
+    description: "Articles and thoughts by Amr Elharony.",
+    url: "/",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Amr Elharony — Writing",
+    description: "Articles and thoughts by Amr Elharony.",
+  },
 };
 
 export const viewport: Viewport = { themeColor: "#06080f" };

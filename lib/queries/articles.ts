@@ -30,6 +30,26 @@ export async function getArticleBySlug(slug: string): Promise<Article | null> {
   return (data as Article) ?? null;
 }
 
+export interface SitemapArticle {
+  slug: string;
+  created_at: string;
+  updated_at: string | null;
+  cover_image: string | null;
+}
+
+/** Published articles for the sitemap — includes updated_at so <lastmod> reflects edits. */
+export async function getSitemapArticles(limit = 5000): Promise<SitemapArticle[]> {
+  const sb = createPublicClient();
+  const { data, error } = await sb
+    .from("longform_articles")
+    .select("slug,created_at,updated_at,cover_image")
+    .eq("published", true)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as SitemapArticle[];
+}
+
 /** All published slugs — for generateStaticParams. */
 export async function getAllPublishedSlugs(): Promise<string[]> {
   const sb = createPublicClient();

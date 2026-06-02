@@ -1,7 +1,8 @@
 "use client";
 // Spatial UI audio ("music engine") — ported from Js/spatial-audio.js. Web Audio
 // synthesized hover/click/overlay tones, gesture-gated, with an on/off toggle.
-// Default OFF on the blog (opt-in via the toggle) — readers shouldn't get sounds unasked.
+// Default ON, but respects an explicit mute (audio_enabled="0"); sound still can't play
+// until the first user gesture (browser autoplay policy).
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;

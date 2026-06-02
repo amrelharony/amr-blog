@@ -58,7 +58,16 @@ export default function WeatherWidget() {
     };
     load();
     const timer = setInterval(load, TTL);
-    return () => clearInterval(timer);
+    // If the page first loaded in a background tab, load() bailed on document.hidden —
+    // retry when the tab becomes visible so the widget isn't stuck on the spinner.
+    const onVisible = () => {
+      if (!document.hidden) load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   if (!w) {
