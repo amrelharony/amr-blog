@@ -4,7 +4,8 @@ import { ADMIN_UUID } from "@/lib/constants";
 
 // Refreshes the Supabase session cookie and guards /admin/* (except /admin/login):
 // only the admin user (matching the RLS UUID) may enter.
-export async function middleware(request: NextRequest) {
+// (Next 16 renamed the `middleware` file convention to `proxy`; runs on the Node.js runtime.)
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

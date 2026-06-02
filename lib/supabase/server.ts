@@ -17,7 +17,7 @@ export async function createClient() {
           try {
             list.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
           } catch {
-            // called from a Server Component — safe to ignore (middleware refreshes)
+            // called from a Server Component — safe to ignore (proxy refreshes)
           }
         },
       },
