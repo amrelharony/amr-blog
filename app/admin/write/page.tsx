@@ -135,6 +135,9 @@ export default function WritePage() {
       row.scheduled_at = null;
     } else if (mode === "draft") {
       row.published = false;
+      // Clear any prior schedule, otherwise publish_scheduled_posts (db-keepalive cron)
+      // would later auto-publish an article the author meant to hold as a draft.
+      row.scheduled_at = null;
     } else {
       if (!form.scheduled) {
         setMsg({ t: "Pick a schedule date.", ok: false });

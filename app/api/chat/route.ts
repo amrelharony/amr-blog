@@ -171,7 +171,8 @@ export async function POST(req: NextRequest) {
     async start(ctrl) {
       const reader = upstream.body!.getReader();
       let buffer = "";
-      let tokensTotal = 0;
+      let tokensTotal = 0; // real usage from the stream (preferred)
+      let estTokens = 0; // running estimate, used only if no usage is reported
       let idleTimer: ReturnType<typeof setTimeout> | null = null;
       const armIdle = () => {
         if (idleTimer) clearTimeout(idleTimer);
@@ -204,7 +205,7 @@ export async function POST(req: NextRequest) {
                 tokensTotal = parsed.usage.total_tokens;
               } else {
                 const content = parsed.choices?.[0]?.delta?.content;
-                if (content && !tokensTotal) tokensTotal += Math.max(1, Math.ceil(content.length / 4));
+                if (content) estTokens += Math.max(1, Math.ceil(content.length / 4));
               }
               ctrl.enqueue(encoder.encode(`data: ${data}\n\n`));
             } catch {
@@ -220,7 +221,7 @@ export async function POST(req: NextRequest) {
         try {
           await supabase.rpc("record_chat_usage", {
             p_user_id: user.id,
-            p_tokens: tokensTotal,
+            p_tokens: tokensTotal || estTokens,
             p_model: OPENCLAW_MODEL,
           });
         } catch {}
