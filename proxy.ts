@@ -2,9 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { ADMIN_UUID } from "@/lib/constants";
 
+// Proxy (formerly Middleware — renamed in Next.js 16; functionality is identical).
 // Refreshes the Supabase session cookie and guards /admin/* (except /admin/login):
 // only the admin user (matching the RLS UUID) may enter.
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

@@ -26,7 +26,6 @@ const SYSTEM_PROMPT =
 
 function sanitize(str: unknown): string {
   if (typeof str !== "string") return "";
-  // eslint-disable-next-line no-control-regex
   return str.replace(/<[^>]*>/g, "").replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "").trim();
 }
 

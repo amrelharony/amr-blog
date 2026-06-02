@@ -36,7 +36,7 @@ async function rpc<T>(fn: string, params?: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function send(req: NextRequest) {
+async function send() {
   const RESEND_KEY = process.env.RESEND_API_KEY;
   if (!RESEND_KEY) return NextResponse.json({ error: "RESEND_API_KEY not configured" }, { status: 500 });
 
@@ -108,10 +108,14 @@ export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const ua = (req.headers.get("user-agent") || "").toLowerCase();
   const auth = req.headers.get("authorization") || "";
-  if (!(ua.startsWith("vercel-cron/") || (cronSecret && auth === `Bearer ${cronSecret}`)))
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const isVercelCron = ua.startsWith("vercel-cron/");
+  const hasSecret = !!cronSecret && auth === `Bearer ${cronSecret}`;
+  // When a CRON_SECRET is configured, require it — the User-Agent alone is spoofable
+  // and would otherwise let anyone trigger a newsletter send.
+  const ok = cronSecret ? hasSecret : isVercelCron;
+  if (!ok) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
-    return await send(req);
+    return await send();
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
@@ -122,7 +126,7 @@ export async function POST(req: NextRequest) {
   if (!secret || req.headers.get("x-admin-secret") !== secret)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
-    return await send(req);
+    return await send();
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

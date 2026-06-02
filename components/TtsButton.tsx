@@ -10,6 +10,7 @@ export default function TtsButton() {
   const [idx, setIdx] = useState(0);
   const [speed, setSpeed] = useState(1);
   const [supported, setSupported] = useState(true);
+  const [count, setCount] = useState(0); // sentence count (drives the progress bar)
 
   const sentences = useRef<{ el: HTMLElement; text: string }[]>([]);
   const playingRef = useRef(false);
@@ -65,6 +66,7 @@ export default function TtsButton() {
       .map((el) => ({ el: el as HTMLElement, text: (el.textContent || "").trim() }))
       .filter((s) => s.text.length > 2);
     if (!sentences.current.length) return;
+    setCount(sentences.current.length);
     playingRef.current = true;
     setPlaying(true);
     setPaused(false);
@@ -103,7 +105,7 @@ export default function TtsButton() {
   };
 
   if (!supported) return null;
-  const total = sentences.current.length || 1;
+  const total = count || 1;
 
   return (
     <>

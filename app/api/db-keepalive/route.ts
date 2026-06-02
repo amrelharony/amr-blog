@@ -12,8 +12,11 @@ export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const auth = req.headers.get("authorization") || "";
   const isVercelCron = ua.startsWith("vercel-cron/");
-  const hasSecret = cronSecret && auth === `Bearer ${cronSecret}`;
-  if (!isVercelCron && !hasSecret) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const hasSecret = !!cronSecret && auth === `Bearer ${cronSecret}`;
+  // When a CRON_SECRET is configured, require it — the User-Agent alone is spoofable.
+  // (Vercel Cron sends the Bearer secret automatically when CRON_SECRET is set.)
+  const ok = cronSecret ? hasSecret : isVercelCron;
+  if (!ok) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const ts = new Date().toISOString();
   const sbHeaders = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" };
