@@ -42,10 +42,16 @@ function applyPrefs(p: Prefs) {
     if (p.fontSize) c.style.fontSize = p.fontSize;
     if (p.fontFamily) c.style.fontFamily = p.fontFamily;
   }
+  // The per-article theme is an *explicit* reader override. If none is set, leave the
+  // global theme alone — otherwise mounting the toolbar would strip `light-mode` from
+  // <html> and flip an auto/light-themed page to dark (ThemeManager won't restore it,
+  // since its cached `last` value hasn't changed).
+  if (!p.theme) return;
   const html = document.documentElement;
   html.classList.remove("lb-sepia", "light-mode");
   if (p.theme === "sepia") html.classList.add("lb-sepia");
   else if (p.theme === "light") html.classList.add("light-mode");
+  // p.theme === "dark" → keep light-mode removed (forces dark for this reader).
 }
 
 export default function ArticleToolbar({ minutes }: { minutes: number }) {
