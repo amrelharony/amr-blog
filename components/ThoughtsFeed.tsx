@@ -51,6 +51,9 @@ export default function ThoughtsFeed({ initial }: { initial: Thought[] }) {
   const [bookmarks, setBookmarks] = useState<string[]>([]);
   const [voted, setVoted] = useState<Record<string, number>>({});
   const [lightbox, setLightbox] = useState<string | null>(null);
+  // Synchronous re-entry guard: `loading` state lags a render, so a fast double-click
+  // could otherwise fire two identical range() queries and append duplicate posts/keys.
+  const loadingRef = useRef(false);
 
   useEffect(() => {
     setMyRx(lsGet("_blog_reactions", {}));
@@ -59,19 +62,24 @@ export default function ThoughtsFeed({ initial }: { initial: Thought[] }) {
   }, []);
 
   const loadMore = async () => {
-    if (loading || !hasMore) return;
+    if (loadingRef.current || !hasMore) return;
+    loadingRef.current = true;
     setLoading(true);
-    const { data } = await sb
-      .from("microblog")
-      .select("*")
-      .order("pinned", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .range(offset, offset + PAGE_SIZE - 1);
-    const rows = (data || []) as Thought[];
-    setPosts((p) => [...p, ...rows]);
-    setOffset((o) => o + rows.length);
-    setHasMore(rows.length >= PAGE_SIZE);
-    setLoading(false);
+    try {
+      const { data } = await sb
+        .from("microblog")
+        .select("*")
+        .order("pinned", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .range(offset, offset + PAGE_SIZE - 1);
+      const rows = (data || []) as Thought[];
+      setPosts((p) => [...p, ...rows]);
+      setOffset((o) => o + rows.length);
+      setHasMore(rows.length >= PAGE_SIZE);
+    } finally {
+      loadingRef.current = false;
+      setLoading(false);
+    }
   };
 
   const toggleRx = async (pid: string, rk: string) => {

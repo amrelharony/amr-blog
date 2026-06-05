@@ -98,6 +98,7 @@ export default function MascotChat() {
   const histRef = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Open hooks for the mascot.
   useEffect(() => {
@@ -198,6 +199,13 @@ export default function MascotChat() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [msgs, streaming]);
 
+  // Closing the panel aborts any in-flight stream so it doesn't keep running (and
+  // calling setState) in the background. Also fires on unmount.
+  useEffect(() => {
+    if (open) return;
+    abortRef.current?.abort();
+  }, [open]);
+
   const updateLast = (patch: Partial<Msg>) =>
     setMsgs((m) => {
       if (!m.length) return m;
@@ -214,6 +222,8 @@ export default function MascotChat() {
     setMsgs((m) => [...m, { role: "user", text: q }, { role: "assistant", text: "" }]);
     setStreaming(true);
     streamingRef.current = true;
+    const ac = new AbortController();
+    abortRef.current = ac;
     try {
       const w = window as Window & { _ensureChatAuth?: () => Promise<unknown> };
       if (w._ensureChatAuth) await w._ensureChatAuth();
@@ -224,6 +234,7 @@ export default function MascotChat() {
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: q.slice(0, 500), history: histRef.current.slice(-10), pageContext: articlePageContext() }),
+        signal: ac.signal,
       });
 
       const dMax = parseInt(res.headers.get("x-ratelimit-daily-max") || "25", 10);
@@ -278,8 +289,10 @@ export default function MascotChat() {
       }
       setSuggestions(followUps(cats));
     } catch {
-      updateLast({ text: "Something went wrong. Please try again.", error: true });
+      // Aborted (panel closed mid-stream) is intentional — don't surface an error.
+      if (!ac.signal.aborted) updateLast({ text: "Something went wrong. Please try again.", error: true });
     } finally {
+      if (abortRef.current === ac) abortRef.current = null;
       setStreaming(false);
       streamingRef.current = false;
     }

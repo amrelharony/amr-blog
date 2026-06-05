@@ -247,6 +247,16 @@ export default function Annotations({ articleId }: { articleId: string }) {
     return () => {
       cancelled = true;
       document.removeEventListener("mouseup", onMouseUp);
+      // Unwrap injected highlight <mark>s (removing the node drops its click listener too),
+      // so they don't accumulate / leak when the reader is reused across article navigations.
+      const c = document.querySelector(".lb-content");
+      c?.querySelectorAll<HTMLElement>(".lb-hl").forEach((mark) => {
+        const parent = mark.parentNode;
+        if (!parent) return;
+        while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+        parent.removeChild(mark);
+      });
+      c?.normalize();
     };
   }, [articleId]);
 
