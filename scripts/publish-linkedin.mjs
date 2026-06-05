@@ -13,6 +13,19 @@ const SB_KEY = process.env.SUPABASE_SERVICE_KEY;
 const LI_TOKEN_VAR = { value: process.env.LINKEDIN_ACCESS_TOKEN };
 const LI_PERSON = process.env.LINKEDIN_PERSON_URN;
 
+// Safety guards (configurable): never auto-post items whose effective publish
+// time is older than MAX_AGE_HOURS, and post at most MAX_PER_RUN items per run,
+// so a first run / re-enable can't dump the whole back catalogue to LinkedIn.
+const MAX_AGE_HOURS = Number(process.env.LINKEDIN_MAX_AGE_HOURS) || 6;
+const MAX_PER_RUN = Number(process.env.LINKEDIN_MAX_PER_RUN) || 5;
+let runBudget = MAX_PER_RUN;
+
+function withinWindow(row) {
+  const t = row.scheduled_at || row.created_at;
+  const ms = t ? new Date(t).getTime() : NaN;
+  return Number.isFinite(ms) && ms >= Date.now() - MAX_AGE_HOURS * 3600000;
+}
+
 if (!SB_URL || !SB_KEY || !LI_TOKEN_VAR.value || !LI_PERSON) {
   console.error('Missing required environment variables');
   process.exit(1);
@@ -212,12 +225,15 @@ async function postToLinkedInWithImage(text, imageUrn) {
 async function publishThoughts() {
   const now = new Date().toISOString();
   const rows = await sbQuery('microblog',
-    `select=id,content,image_url,published&linkedin_posted=eq.false&or=(and(published.eq.true,scheduled_at.is.null),and(scheduled_at.not.is.null,scheduled_at.lte.${now}))`
+    `select=id,content,image_url,published,created_at,scheduled_at&linkedin_posted=eq.false&or=(and(published.eq.true,scheduled_at.is.null),and(scheduled_at.not.is.null,scheduled_at.lte.${now}))`
   );
 
-  console.log(`Found ${rows.length} thought(s) due for LinkedIn`);
+  const fresh = rows.filter(withinWindow);
+  const batch = fresh.slice(0, runBudget);
+  runBudget -= batch.length;
+  console.log(`Found ${rows.length} thought(s) due; ${fresh.length} within ${MAX_AGE_HOURS}h window; posting ${batch.length} (run budget left: ${runBudget})`);
 
-  for (const row of rows) {
+  for (const row of batch) {
     try {
       console.log(`Publishing thought ${row.id}...`);
 
@@ -243,12 +259,15 @@ async function publishThoughts() {
 async function publishArticles() {
   const now = new Date().toISOString();
   const rows = await sbQuery('longform_articles',
-    `select=id,title,slug,excerpt,cover_image,published,scheduled_at&linkedin_posted=eq.false&or=(published.eq.true,and(scheduled_at.not.is.null,scheduled_at.lte.${now}))`
+    `select=id,title,slug,excerpt,cover_image,published,scheduled_at,created_at&linkedin_posted=eq.false&or=(published.eq.true,and(scheduled_at.not.is.null,scheduled_at.lte.${now}))`
   );
 
-  console.log(`Found ${rows.length} article(s) due for LinkedIn`);
+  const fresh = rows.filter(withinWindow);
+  const batch = fresh.slice(0, runBudget);
+  runBudget -= batch.length;
+  console.log(`Found ${rows.length} article(s) due; ${fresh.length} within ${MAX_AGE_HOURS}h window; posting ${batch.length} (run budget left: ${runBudget})`);
 
-  for (const row of rows) {
+  for (const row of batch) {
     try {
       console.log(`Publishing article "${row.title}" (${row.id})...`);
       console.log(`  cover_image: ${row.cover_image || '(none)'}`);
