@@ -27,12 +27,16 @@ export async function GET(req: NextRequest) {
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT);
   let imgRes: Response;
   try {
-    imgRes = await fetch(imageUrl, { signal: ctrl.signal });
+    // redirect:"manual" so a 3xx off the allow-listed host can't be followed to
+    // an arbitrary target — the host check above only validates the initial URL.
+    imgRes = await fetch(imageUrl, { signal: ctrl.signal, redirect: "manual" });
   } catch {
     clearTimeout(timer);
     return new Response("Failed to fetch image", { status: 502 });
   }
   clearTimeout(timer);
+  if (imgRes.type === "opaqueredirect" || (imgRes.status >= 300 && imgRes.status < 400))
+    return new Response("Redirect not allowed", { status: 403 });
   if (!imgRes.ok) return new Response("Image not found", { status: 404 });
 
   const ct = imgRes.headers.get("content-type") || "";

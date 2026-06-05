@@ -10,6 +10,7 @@ export default function TtsButton() {
   const [idx, setIdx] = useState(0);
   const [speed, setSpeed] = useState(1);
   const [supported, setSupported] = useState(true);
+  const [total, setTotal] = useState(1); // sentence count, mirrored into state for render
 
   const sentences = useRef<{ el: HTMLElement; text: string }[]>([]);
   const playingRef = useRef(false);
@@ -65,6 +66,7 @@ export default function TtsButton() {
       .map((el) => ({ el: el as HTMLElement, text: (el.textContent || "").trim() }))
       .filter((s) => s.text.length > 2);
     if (!sentences.current.length) return;
+    setTotal(sentences.current.length);
     playingRef.current = true;
     setPlaying(true);
     setPaused(false);
@@ -103,7 +105,6 @@ export default function TtsButton() {
   };
 
   if (!supported) return null;
-  const total = sentences.current.length || 1;
 
   return (
     <>

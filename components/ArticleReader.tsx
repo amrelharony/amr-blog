@@ -45,7 +45,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
         const used: Record<string, number> = {};
         const items = headings.map((h) => {
           const text = (h.textContent || "").trim();
-          let base = h.id || slugify(text) || "section";
+          const base = h.id || slugify(text) || "section";
           let id = base;
           if (used[id]) {
             used[id]++;

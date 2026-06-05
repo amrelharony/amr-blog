@@ -3,6 +3,7 @@ import { getFeedArticles } from "@/lib/queries/articles";
 import { fmtDate } from "@/lib/format";
 import type { ArticleCard } from "@/lib/types";
 import FeedAnimations from "@/components/FeedAnimations";
+import FeedSearch from "@/components/FeedSearch";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import ContinueReading from "@/components/ContinueReading";
 import CollectionsStrip from "@/components/CollectionsStrip";
@@ -193,6 +194,7 @@ export default async function FeedPage() {
         )}
       </main>
       {articles.length > 0 && <NewsletterSignup />}
+      <FeedSearch />
       <FeedAnimations />
     </div>
   );

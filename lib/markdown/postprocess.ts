@@ -80,9 +80,11 @@ export function processGalleries(html: string): string {
   html = html.replace(/<img(?![^>]*loading=)/g, '<img loading="lazy" decoding="async"');
 
   html = html.replace(/<p>\s*(<img[^>]+>)\s*<\/p>/g, (_m, imgTag: string) => {
+    // `alt` is captured straight from marked's output, where it is already
+    // HTML-escaped — re-escaping here would double-encode (& → &amp;amp;).
     const alt = (imgTag.match(/alt="([^"]*)"/) || [])[1] || "";
     if (alt) {
-      return `<figure>${imgTag}<figcaption>${esc(alt)}</figcaption></figure>`;
+      return `<figure>${imgTag}<figcaption>${alt}</figcaption></figure>`;
     }
     return `<figure>${imgTag}</figure>`;
   });

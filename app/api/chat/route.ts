@@ -26,7 +26,6 @@ const SYSTEM_PROMPT =
 
 function sanitize(str: unknown): string {
   if (typeof str !== "string") return "";
-  // eslint-disable-next-line no-control-regex
   return str.replace(/<[^>]*>/g, "").replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "").trim();
 }
 
@@ -173,6 +172,7 @@ export async function POST(req: NextRequest) {
       let buffer = "";
       let tokensTotal = 0; // real usage from the stream (preferred)
       let estTokens = 0; // running estimate, used only if no usage is reported
+      let doneSent = false; // did the client receive a stream terminator?
       let idleTimer: ReturnType<typeof setTimeout> | null = null;
       const armIdle = () => {
         if (idleTimer) clearTimeout(idleTimer);
@@ -197,6 +197,7 @@ export async function POST(req: NextRequest) {
             const data = trimmed.slice(6);
             if (data === "[DONE]") {
               ctrl.enqueue(encoder.encode("data: [DONE]\n\n"));
+              doneSent = true;
               continue;
             }
             try {
@@ -217,6 +218,13 @@ export async function POST(req: NextRequest) {
         // upstream stream error — close gracefully
       } finally {
         if (idleTimer) clearTimeout(idleTimer);
+        // Always terminate the client stream — on idle-timeout or upstream error
+        // the upstream "[DONE]" never arrives, which would otherwise hang the client.
+        if (!doneSent) {
+          try {
+            ctrl.enqueue(encoder.encode("data: [DONE]\n\n"));
+          } catch {}
+        }
         ctrl.close();
         try {
           await supabase.rpc("record_chat_usage", {

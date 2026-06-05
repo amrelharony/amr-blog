@@ -68,7 +68,12 @@ export default function ThoughtsFeed({ initial }: { initial: Thought[] }) {
       .order("created_at", { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1);
     const rows = (data || []) as Thought[];
-    setPosts((p) => [...p, ...rows]);
+    // De-dupe by id: range/offset pagination over a newest-first, mutable list can
+    // re-surface a row if a post was inserted/removed between page fetches.
+    setPosts((p) => {
+      const seen = new Set(p.map((x) => x.id));
+      return [...p, ...rows.filter((r) => !seen.has(r.id))];
+    });
     setOffset((o) => o + rows.length);
     setHasMore(rows.length >= PAGE_SIZE);
     setLoading(false);
