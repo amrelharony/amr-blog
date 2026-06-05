@@ -32,14 +32,19 @@ export default function AdminSubscribers() {
 
   const confirmed = subs.filter((s) => s.confirmed && !s.unsubscribed_at);
 
+  // Quote every field and neutralise spreadsheet formula injection (leading = + - @ tab),
+  // since email/job_title are visitor-supplied.
+  const csvCell = (v: unknown) => {
+    let s = String(v ?? "");
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return `"${s.replace(/"/g, '""')}"`;
+  };
   const exportCsv = () => {
-    const header = "email,job_title,confirmed,unsubscribed,created_at\n";
-    const body = subs
-      .map((s) =>
-        [s.email, (s.job_title || "").replace(/,/g, " "), s.confirmed, !!s.unsubscribed_at, s.created_at].join(","),
-      )
-      .join("\n");
-    const blob = new Blob([header + body], { type: "text/csv" });
+    const header = ["email", "job_title", "confirmed", "unsubscribed", "created_at"].join(",");
+    const rows = subs.map((s) =>
+      [s.email, s.job_title || "", s.confirmed, !!s.unsubscribed_at, s.created_at].map(csvCell).join(","),
+    );
+    const blob = new Blob([[header, ...rows].join("\r\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "subscribers.csv";

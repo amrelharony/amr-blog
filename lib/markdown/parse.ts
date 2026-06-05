@@ -24,8 +24,3 @@ export function renderArticleHtml(md: string | null | undefined): string {
   const html = processFootnotes(processGalleries(parseMarkdown(md)));
   return sanitizeHtml(html);
 }
-
-/** Lighter inline render (excerpts, microblog) — no footnotes/galleries. */
-export function renderInlineHtml(md: string | null | undefined): string {
-  return sanitizeHtml(parseMarkdown(md));
-}

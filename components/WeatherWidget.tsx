@@ -44,8 +44,10 @@ export default function WeatherWidget() {
       } catch {}
       try {
         const r = await fetch(API);
+        if (!r.ok) return;
         const j = await r.json();
-        const c = j.current;
+        const c = j?.current;
+        if (!c || typeof c.temperature_2m !== "number") return;
         const data = { temp: Math.round(c.temperature_2m), code: c.weather_code, isDay: c.is_day === 1 };
         setW(data);
         window.dispatchEvent(new CustomEvent("weatherupdate", { detail: data }));

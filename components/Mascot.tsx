@@ -24,11 +24,10 @@ type MascotWindow = Window & {
 
 export default function Mascot() {
   useEffect(() => {
-    // Load on all viewports so the AI chat is reachable everywhere. The heavy 16 MB 3D
-    // model is skipped on mobile inside mascot-assistant.js (emoji launcher + same chat
-    // panel there) — only desktop loads the full Three.js mascot. Reduced-motion still skips.
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
+    // Load on all viewports + motion preferences so the AI chat is reachable everywhere.
+    // mascot-assistant.js self-gates the heavy 16 MB Three.js model: it loads the full 3D
+    // mascot only when motion is allowed, and otherwise shows a lightweight emoji launcher
+    // (the chat panel works in both cases). Low-memory mobile also skips the 3D internally.
     const w = window as MascotWindow;
     if (w.__mascotBooted || document.getElementById("mascot-assistant-script")) return;
     w.__mascotBooted = true;

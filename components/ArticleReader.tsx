@@ -202,6 +202,20 @@ export default function ArticleReader({ slug }: { slug: string }) {
       document.querySelector(".lb-lightbox")?.remove();
     });
 
+    // ── Twitter/X embeds ── processEmbeds emits <blockquote class="twitter-tweet">, but
+    // widgets.js isn't loaded globally — hydrate it here when a tweet is present.
+    if (content && content.querySelector(".twitter-tweet")) {
+      const tw = window as Window & { twttr?: { widgets?: { load?: (el?: Element) => void } } };
+      if (tw.twttr?.widgets?.load) tw.twttr.widgets.load(content);
+      else if (!document.getElementById("twitter-wjs")) {
+        const s = document.createElement("script");
+        s.id = "twitter-wjs";
+        s.src = "https://platform.twitter.com/widgets.js";
+        s.async = true;
+        document.body.appendChild(s);
+      }
+    }
+
     return () => cleanups.forEach((fn) => fn());
   }, [slug]);
 
