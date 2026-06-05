@@ -68,7 +68,9 @@ export function processFootnotes(html: string): string {
   if (Object.keys(refs).length) {
     html += '<div class="lb-footnotes"><div class="lb-footnotes-title">Footnotes</div>';
     Object.keys(refs).forEach((id) => {
-      html += `<div class="lb-footnote-item" id="fn-${id}"><span class="lb-footnote-num">${id}.</span><span>${esc(refs[id])} <a class="lb-footnote-back" href="#fnref-${id}">↩</a></span></div>`;
+      // refs[id] is already-parsed inline HTML from marked (links/bold/code); render it
+      // as HTML rather than escaping it — the final sanitizeHtml pass (parse.ts) covers safety.
+      html += `<div class="lb-footnote-item" id="fn-${id}"><span class="lb-footnote-num">${id}.</span><span>${refs[id]} <a class="lb-footnote-back" href="#fnref-${id}">↩</a></span></div>`;
     });
     html += "</div>";
   }

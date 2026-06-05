@@ -27,7 +27,10 @@ export async function GET(req: NextRequest) {
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT);
   let imgRes: Response;
   try {
-    imgRes = await fetch(imageUrl, { signal: ctrl.signal });
+    // redirect: "manual" — the host allowlist only validates the first hop, so a 3xx
+    // from the trusted host could otherwise be followed to an unvalidated address (SSRF).
+    // A redirected response becomes an opaque (status 0) response and fails the !ok check below.
+    imgRes = await fetch(imageUrl, { signal: ctrl.signal, redirect: "manual" });
   } catch {
     clearTimeout(timer);
     return new Response("Failed to fetch image", { status: 502 });
