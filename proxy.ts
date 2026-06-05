@@ -34,7 +34,11 @@ export async function proxy(request: NextRequest) {
     if (!user || user.id !== ADMIN_UUID) {
       const url = request.nextUrl.clone();
       url.pathname = "/admin/login";
-      return NextResponse.redirect(url);
+      // Carry any refreshed-session cookies (written by getUser → setAll) onto the
+      // redirect, otherwise the rotated refresh token is dropped and the session thrashes.
+      const redirect = NextResponse.redirect(url);
+      response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+      return redirect;
     }
   }
 

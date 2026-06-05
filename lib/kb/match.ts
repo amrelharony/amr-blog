@@ -55,7 +55,9 @@ _synGroups.forEach((group) => {
 
 const _keyFreq: Record<string, number> = {};
 KB.forEach((e) => e.keys.forEach((k) => (_keyFreq[k] = (_keyFreq[k] || 0) + 1)));
-const _maxFreq = Math.max(1, ...Object.values(_keyFreq));
+// reduce (not Math.max(...spread)) — spreading a very large value array would overflow
+// the call-stack argument limit if the KB grows past ~100k distinct keys.
+const _maxFreq = Object.values(_keyFreq).reduce((m, v) => Math.max(m, v), 1);
 
 function scoreEntry(entry: KBEntry, words: string[], ngrams: string[], q: string): number {
   let score = 0;
