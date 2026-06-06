@@ -37,7 +37,9 @@ function renderMd(s: string): string {
 export function fmtContent(raw: string): string {
   let s = esc(raw);
   s = renderMd(s);
-  s = s.replace(/#(\w+)/g, '<span class="hashtag" data-tag="$1">#$1</span>');
+  // Only treat # as a hashtag at the start or after whitespace, so a URL fragment
+  // (e.g. example.com/page#section) isn't split off into a bogus hashtag span.
+  s = s.replace(/(^|\s)#(\w+)/g, '$1<span class="hashtag" data-tag="$2">#$2</span>');
   s = s.replace(
     /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})(?:[^\s<]*)/g,
     '<div class="blog-yt-embed"><iframe src="https://www.youtube-nocookie.com/embed/$1" allowfullscreen loading="lazy"></iframe></div>',
