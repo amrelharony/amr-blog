@@ -11,9 +11,10 @@ npm run preview:devices
 
 ## What it does
 
-For every `device × page` (iPhone SE · iPhone 13 · Pixel 7 → feed · thoughts · article):
+For every `device × theme × page` (iPhone SE · iPhone 13 · Pixel 7 ×
+dark · light × feed · thoughts · article = 18 captures):
 
-1. **Screenshot** → `scripts/device-preview/shots/<device>__<page>.png` (git-ignored)
+1. **Screenshot** → `scripts/device-preview/shots/<device>__<theme>__<page>.png` (git-ignored)
 2. **Assert** (hard-fails the run, non-zero exit):
    - **no horizontal overflow** — `scrollWidth ≤ viewport`
    - **no iOS focus-zoom** — every visible text field is `≥ 16px`
@@ -29,7 +30,8 @@ A `report.json` with the raw measurements is written alongside the shots.
   article-by-slug read (`slug=eq.`) must return exactly one row.
 - `run.mjs` — starts the mock + `next dev`, waits for readiness, then runs the
   Playwright matrix. Contexts use `reducedMotion: "reduce"` to skip the intro
-  overlay and force scroll-reveal content visible for stable captures.
+  overlay and force scroll-reveal content visible for stable captures. The theme
+  is pinned per-context via `localStorage.theme` (dark/light) + `colorScheme`.
 
 ## Requirements
 

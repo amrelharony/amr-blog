@@ -24,6 +24,7 @@ const APP_PORT = 3100;
 const BASE = `http://127.0.0.1:${APP_PORT}`;
 
 const DEVICES = ["iPhone SE", "iPhone 13", "Pixel 7"];
+const THEMES = ["dark", "light"]; // .light-mode is driven by localStorage.theme
 const PAGES = [
   { name: "feed", path: "/" },
   { name: "thoughts", path: "/thoughts" },
@@ -88,7 +89,7 @@ function audit(targetSelectors) {
   };
 }
 
-function evalRow(device, page, m) {
+function evalRow(device, theme, page, m) {
   const problems = [];
   const warnings = [];
   if (m.scrollWidth > m.innerWidth + 2)
@@ -101,7 +102,7 @@ function evalRow(device, page, m) {
     if (t.minHeight < 30) problems.push(`${t.sel} ${t.minHeight}px<30`);
     else if (t.minHeight < 40) warnings.push(`${t.sel} ${t.minHeight}px`);
   }
-  return { device, page, ...m, problems, warnings, ok: problems.length === 0 };
+  return { device, theme, page, ...m, problems, warnings, ok: problems.length === 0 };
 }
 
 async function main() {
@@ -137,40 +138,43 @@ async function main() {
 
     for (const dname of DEVICES) {
       const device = devices[dname];
-      const ctx = await browser.newContext({
-        ...device,
-        reducedMotion: "reduce", // skips the intro overlay + heavy anims for clean, stable shots
-        colorScheme: "dark",
-      });
-      // Pin the dark theme so screenshots are deterministic (theme is time-of-day by default).
-      await ctx.addInitScript(() => {
-        try { localStorage.setItem("theme", "dark"); } catch {}
-      });
-      const page = await ctx.newPage();
+      for (const theme of THEMES) {
+        const ctx = await browser.newContext({
+          ...device,
+          reducedMotion: "reduce", // skips the intro overlay + heavy anims for clean, stable shots
+          colorScheme: theme,
+        });
+        // Pin the theme so screenshots are deterministic (it's time-of-day by default).
+        // .light-mode is applied pre-paint from localStorage.theme by the inline script.
+        await ctx.addInitScript((t) => {
+          try { localStorage.setItem("theme", t); } catch {}
+        }, theme);
+        const page = await ctx.newPage();
 
-      for (const p of PAGES) {
-        const tag = `${dname.replace(/\s+/g, "-")}__${p.name}`;
-        try {
-          await page.goto(BASE + p.path, { waitUntil: "load", timeout: 60000 });
-          await page.waitForSelector(".lb-nav", { timeout: 30000 }).catch(() => {});
-          // let the intro detach + fonts settle
-          await page.waitForFunction(() => !document.getElementById("blog-intro"), null, { timeout: 8000 }).catch(() => {});
-          await sleep(900);
-          // Force the final, revealed state for the capture: scroll-reveal elements
-          // (.lb-reveal animate in on intersection; .blog-post likewise) would
-          // otherwise be invisible in a headless full-page shot.
-          await page.addStyleTag({
-            content: ".blog-post,.lb-reveal,.lb-reveal-left{opacity:1!important;transform:none!important}",
-          }).catch(() => {});
-          await sleep(150);
-          await page.screenshot({ path: join(SHOTS, `${tag}.png`), fullPage: true });
-          const m = await page.evaluate(audit, TARGET_SELECTORS);
-          results.push(evalRow(dname, p.name, m));
-        } catch (e) {
-          results.push({ device: dname, page: p.name, error: String(e.message || e), problems: ["load-failed"], warnings: [], ok: false });
+        for (const p of PAGES) {
+          const tag = `${dname.replace(/\s+/g, "-")}__${theme}__${p.name}`;
+          try {
+            await page.goto(BASE + p.path, { waitUntil: "load", timeout: 60000 });
+            await page.waitForSelector(".lb-nav", { timeout: 30000 }).catch(() => {});
+            // let the intro detach + fonts settle
+            await page.waitForFunction(() => !document.getElementById("blog-intro"), null, { timeout: 8000 }).catch(() => {});
+            await sleep(900);
+            // Force the final, revealed state for the capture: scroll-reveal elements
+            // (.lb-reveal animate in on intersection; .blog-post likewise) would
+            // otherwise be invisible in a headless full-page shot.
+            await page.addStyleTag({
+              content: ".blog-post,.lb-reveal,.lb-reveal-left{opacity:1!important;transform:none!important}",
+            }).catch(() => {});
+            await sleep(150);
+            await page.screenshot({ path: join(SHOTS, `${tag}.png`), fullPage: true });
+            const m = await page.evaluate(audit, TARGET_SELECTORS);
+            results.push(evalRow(dname, theme, p.name, m));
+          } catch (e) {
+            results.push({ device: dname, theme, page: p.name, error: String(e.message || e), problems: ["load-failed"], warnings: [], ok: false });
+          }
         }
+        await ctx.close();
       }
-      await ctx.close();
     }
   } finally {
     if (browser) await browser.close();
@@ -184,19 +188,19 @@ async function main() {
   await writeFile(join(SHOTS, "report.json"), JSON.stringify(results, null, 2));
   console.log("\n──────── DEVICE PREVIEW REPORT ────────");
   for (const r of results) {
-    const head = `${r.ok ? "✓" : "✗"} ${r.device.padEnd(11)} ${r.page.padEnd(9)}`;
+    const head = `${r.ok ? "✓" : "✗"} ${r.device.padEnd(11)} ${r.theme.padEnd(5)} ${r.page.padEnd(9)}`;
     if (r.error) { console.log(`${head}  ERROR ${r.error}`); continue; }
     const tgt = r.targets.map((t) => `${t.sel}=${t.minHeight}`).join(" ");
     console.log(`${head}  width ${r.scrollWidth}/${r.innerWidth}  inputs[${r.inputs.map((i) => i.fontSize).join(",") || "-"}]`);
-    if (tgt) console.log(`              targets ${tgt}`);
-    if (r.warnings.length) console.log(`              ⚠ under-44px: ${r.warnings.join(", ")}`);
-    if (r.problems.length) console.log(`              ✗ ${r.problems.join(", ")}`);
+    if (tgt) console.log(`                    targets ${tgt}`);
+    if (r.warnings.length) console.log(`                    ⚠ under-40px: ${r.warnings.join(", ")}`);
+    if (r.problems.length) console.log(`                    ✗ ${r.problems.join(", ")}`);
   }
   const failed = results.filter((r) => !r.ok);
   console.log("───────────────────────────────────────");
   console.log(`${results.length - failed.length}/${results.length} passed · screenshots → scripts/device-preview/shots/`);
   if (failed.length) {
-    console.log(`FAILED: ${failed.map((r) => `${r.device}/${r.page}`).join(", ")}`);
+    console.log(`FAILED: ${failed.map((r) => `${r.device}/${r.theme}/${r.page}`).join(", ")}`);
     process.exit(1);
   }
 }
