@@ -23,8 +23,11 @@ const SHOTS = join(HERE, "shots");
 const APP_PORT = 3100;
 const BASE = `http://127.0.0.1:${APP_PORT}`;
 
-const DEVICES = ["iPhone SE", "iPhone 13", "Pixel 7"];
-const THEMES = ["dark", "light"]; // .light-mode is driven by localStorage.theme
+// Matrix is overridable via env (comma-separated) so CI / smoke runs can scope it,
+// e.g. PREVIEW_DEVICES="iPhone 13" PREVIEW_THEMES=dark npm run preview:devices
+const list = (v, d) => (v || d).split(",").map((s) => s.trim()).filter(Boolean);
+const DEVICES = list(process.env.PREVIEW_DEVICES, "iPhone SE,iPhone 13,Pixel 7");
+const THEMES = list(process.env.PREVIEW_THEMES, "dark,light"); // .light-mode ← localStorage.theme
 const PAGES = [
   { name: "feed", path: "/" },
   { name: "thoughts", path: "/thoughts" },

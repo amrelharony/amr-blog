@@ -1,0 +1,44 @@
+name: Device Preview
+
+# Runs the mobile device-preview matrix (3 phones × dark/light × feed/thoughts/article)
+# and fails the build on a regression: horizontal overflow, an input under 16px
+# (iOS focus-zoom), or a tap target under 30px. See scripts/device-preview/README.md.
+
+on:
+  push:
+    branches: [master, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: device-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run device-preview matrix
+        run: npm run preview:devices
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-preview-shots
+          path: scripts/device-preview/shots/
+          if-no-files-found: ignore
