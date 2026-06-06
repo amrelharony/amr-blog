@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { haptic } from "@/lib/haptics";
 import { type ThemeMode, getMode, setMode } from "@/lib/theme";
 
@@ -19,13 +19,20 @@ const LABEL: Record<ThemeMode, string> = {
 
 export default function ThemeToggle() {
   const [mode, setModeState] = useState<ThemeMode>("auto");
+  // Mirror the committed mode in a ref so cycle() always transitions from the real
+  // stored value — not the stale "auto" render-closure before the mount effect runs
+  // (which would otherwise cycle from the wrong base on an early/rapid click).
+  const modeRef = useRef<ThemeMode>("auto");
 
   useEffect(() => {
-    setModeState(getMode());
+    const m = getMode();
+    modeRef.current = m;
+    setModeState(m);
   }, []);
 
   const cycle = () => {
-    const next = NEXT[mode];
+    const next = NEXT[modeRef.current];
+    modeRef.current = next;
     setModeState(next);
     setMode(next);
     document.documentElement.classList.remove("lb-sepia");

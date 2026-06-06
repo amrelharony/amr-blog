@@ -16,9 +16,22 @@ export default function TtsButton() {
   const playingRef = useRef(false);
   const idxRef = useRef(0);
   const speedRef = useRef(1);
+  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
 
   useEffect(() => {
     setSupported(typeof window !== "undefined" && "speechSynthesis" in window);
+  }, []);
+  // Voices load asynchronously in Chromium — getVoices() is [] until `voiceschanged`
+  // fires. Prime + cache them so the first "Listen" picks the preferred voice.
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const load = () => {
+      const v = speechSynthesis.getVoices();
+      if (v.length) voicesRef.current = v;
+    };
+    load();
+    speechSynthesis.addEventListener?.("voiceschanged", load);
+    return () => speechSynthesis.removeEventListener?.("voiceschanged", load);
   }, []);
   useEffect(() => {
     speedRef.current = speed;
@@ -48,7 +61,7 @@ export default function TtsButton() {
     const u = new SpeechSynthesisUtterance(list[i].text);
     u.rate = speedRef.current;
     u.lang = "en-US";
-    const voices = speechSynthesis.getVoices();
+    const voices = voicesRef.current.length ? voicesRef.current : speechSynthesis.getVoices();
     const v =
       voices.find((x) => x.name.includes("Google") && x.lang.startsWith("en")) ||
       voices.find((x) => x.lang.startsWith("en"));

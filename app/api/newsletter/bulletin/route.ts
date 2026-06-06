@@ -68,6 +68,26 @@ async function send(req: NextRequest) {
   const batch = subscribers.slice(offset, offset + BATCH);
   const remaining = subscribers.length - offset - batch.length;
 
+  // Claim the in-progress slot BEFORE sending anything. A first run (no pending batch)
+  // creates the log here; the unique idx_bulletin_in_progress constraint rejects a
+  // concurrent invocation (e.g. cron + manual POST) so only one run dispatches the
+  // first batch — otherwise both would email batch 1 before either claimed the lock.
+  if (!logId) {
+    try {
+      logId = await rpc<string>("create_bulletin_log", {
+        p_article_count: articles.length,
+        p_recipient_count: subscribers.length,
+        p_batch_remaining: Math.max(0, remaining),
+        p_articles_since: articlesSince,
+        p_status: "in_progress",
+      });
+    } catch (e) {
+      if (/duplicate key|unique constraint|idx_bulletin_in_progress/i.test(String((e as Error).message)))
+        return NextResponse.json({ ok: true, skipped: true, reason: "Another send in progress" });
+      throw e;
+    }
+  }
+
   let sent = 0;
   for (const sub of batch) {
     const unsubUrl = `${SITE}/api/newsletter/unsubscribe?token=${encodeURIComponent(sub.unsubscribe_token)}`;
@@ -84,21 +104,6 @@ async function send(req: NextRequest) {
     if (res.ok) sent++;
   }
 
-  if (!logId) {
-    try {
-      logId = await rpc<string>("create_bulletin_log", {
-        p_article_count: articles.length,
-        p_recipient_count: subscribers.length,
-        p_batch_remaining: Math.max(0, remaining),
-        p_articles_since: articlesSince,
-        p_status: "in_progress",
-      });
-    } catch (e) {
-      if (/duplicate key|unique constraint|idx_bulletin_in_progress/i.test(String((e as Error).message)))
-        return NextResponse.json({ ok: true, skipped: true, reason: "Another send in progress" });
-      throw e;
-    }
-  }
   await rpc("update_bulletin_log", { p_id: logId, p_batch_remaining: Math.max(0, remaining), p_status: remaining > 0 ? "pending" : "sent" });
 
   return NextResponse.json({ ok: true, articles: articles.length, sent, totalSubscribers: subscribers.length, remaining: Math.max(0, remaining) });

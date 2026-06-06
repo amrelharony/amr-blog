@@ -154,8 +154,15 @@ export default function WritePage() {
         const { error } = await sb.from("longform_articles").update(row).eq("id", form.id);
         if (error) throw error;
       } else {
-        const { error } = await sb.from("longform_articles").insert(row);
+        // Capture the new id so a subsequent Save/Publish UPDATEs this row instead
+        // of inserting a duplicate (which would also collide on the unique slug).
+        const { data, error } = await sb
+          .from("longform_articles")
+          .insert(row)
+          .select("id")
+          .single();
         if (error) throw error;
+        setForm((f) => ({ ...f, id: (data as { id: string }).id }));
       }
       await revalidate(slug);
       setMsg({ t: "Saved.", ok: true });

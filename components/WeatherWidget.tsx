@@ -33,7 +33,8 @@ export default function WeatherWidget() {
 
   useEffect(() => {
     const load = async () => {
-      if (document.hidden) return;
+      // Render the cache first — it's free and must show even in a background tab,
+      // otherwise a widget mounted while hidden is stuck on the spinner.
       try {
         const cached = JSON.parse(localStorage.getItem(LS) || "null");
         if (cached && Date.now() - cached.ts < TTL) {
@@ -42,6 +43,8 @@ export default function WeatherWidget() {
           return;
         }
       } catch {}
+      // Only skip the network in a hidden tab; visibilitychange retries on focus.
+      if (document.hidden) return;
       try {
         const r = await fetch(API);
         if (!r.ok) return;
@@ -60,7 +63,14 @@ export default function WeatherWidget() {
     };
     load();
     const timer = setInterval(load, TTL);
-    return () => clearInterval(timer);
+    const onVis = () => {
+      if (!document.hidden) load();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, []);
 
   if (!w) {

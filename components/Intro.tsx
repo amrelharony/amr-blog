@@ -96,8 +96,9 @@ export default function Intro() {
       };
     }
 
+    let cancelled = false;
     runRes.done.then(() => {
-      if (!finished) wipe();
+      if (!cancelled && !finished) wipe();
     });
 
     const skip = () => wipe();
@@ -108,6 +109,7 @@ export default function Intro() {
     const safety = window.setTimeout(wipe, 6000);
 
     return () => {
+      cancelled = true;
       try {
         cleanupVar();
       } catch {}

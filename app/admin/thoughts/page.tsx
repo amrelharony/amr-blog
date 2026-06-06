@@ -55,7 +55,9 @@ export default function AdminThoughts() {
         if (error) throw error;
         image_url = sb.storage.from("microblog-images").getPublicUrl(data.path).data.publicUrl;
       }
-      const row: Record<string, unknown> = { content: content.trim(), published: mode === "publish", linkedin_posted: true };
+      // Leave linkedin_posted at its default (false) so the hourly LinkedIn cron
+      // (scripts/publish-linkedin.mjs) can pick up published/scheduled thoughts.
+      const row: Record<string, unknown> = { content: content.trim(), published: mode === "publish" };
       if (image_url) row.image_url = image_url;
       // [poll:Question?|Option 1|Option 2]
       const pollMatch = content.match(/\[poll:(.+?)\|(.+?)\]/);

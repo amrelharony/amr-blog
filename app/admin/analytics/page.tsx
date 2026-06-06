@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 interface ArtStat {
+  id: string;
   title: string;
   slug: string;
   views: number;
@@ -18,7 +19,7 @@ export default async function AdminAnalytics() {
   const sb = await createClient();
   const { data } = await sb
     .from("longform_articles")
-    .select("title,slug,views,reactions,published")
+    .select("id,title,slug,views,reactions,published")
     .order("views", { ascending: false })
     .limit(20);
   const arts = (data || []) as ArtStat[];
@@ -51,7 +52,7 @@ export default async function AdminAnalytics() {
         <div className="adm-label">Top articles by views</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
           {arts.map((a) => (
-            <div key={a.slug}>
+            <div key={a.id}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 12 }}>
                   {a.title} {!a.published && <em style={{ color: "var(--sub)" }}>(draft)</em>}

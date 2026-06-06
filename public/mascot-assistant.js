@@ -336,7 +336,7 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
   // ══════════════════════════════════════════════════════
   var scene, camera, renderer, controls, clock;
   var mascotRoot, mascotMesh, mascotMaterial;
-  var baseY = 0, baseScale = 1;
+  var baseX = 0, baseY = 0, baseScale = 1;
   var alive = false, paused = false, sceneReady = false;
   var disposables = [];
   var accentLight, rimLight;
@@ -781,6 +781,7 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
     mascotRoot.position.sub(center.multiplyScalar(scale));
     mascotRoot.position.y -= (box.min.y * scale);
 
+    baseX = mascotRoot.position.x;
     baseY = mascotRoot.position.y;
     baseScale = scale;
 
@@ -3316,7 +3317,7 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
     ss.scaleXZ += ss.velXZ * dt;
 
     // headTilt spring disabled — mascot must stay upright (no Z rotation)
-    mascotRoot.position.x += proceduralAnim.springs.bodyLean.value;
+    mascotRoot.position.x = baseX + proceduralAnim.springs.bodyLean.value;
     mascotRoot.position.y = baseY + proceduralAnim.springs.bobY.value + proceduralAnim.springs.breathScale.value;
 
     mascotRoot.scale.y = baseScale * proceduralAnim.squashStretch.scaleY;

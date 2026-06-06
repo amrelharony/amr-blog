@@ -16,7 +16,7 @@ interface CommentRow {
 export default function AdminComments() {
   const sb = getBrowserClient();
   const [rows, setRows] = useState<CommentRow[]>([]);
-  const [titles, setTitles] = useState<Record<string, string>>({});
+  const [articles, setArticles] = useState<Record<string, { title: string; slug: string }>>({});
 
   const load = useCallback(async () => {
     const { data } = await sb
@@ -28,10 +28,10 @@ export default function AdminComments() {
     setRows(list);
     const ids = [...new Set(list.map((c) => c.article_id))];
     if (ids.length) {
-      const { data: arts } = await sb.from("longform_articles").select("id,title").in("id", ids);
-      const map: Record<string, string> = {};
-      (arts || []).forEach((a: { id: string; title: string }) => (map[a.id] = a.title));
-      setTitles(map);
+      const { data: arts } = await sb.from("longform_articles").select("id,title,slug").in("id", ids);
+      const map: Record<string, { title: string; slug: string }> = {};
+      (arts || []).forEach((a: { id: string; title: string; slug: string }) => (map[a.id] = { title: a.title, slug: a.slug }));
+      setArticles(map);
     }
   }, [sb]);
   useEffect(() => {
@@ -57,9 +57,13 @@ export default function AdminComments() {
               <div style={{ fontSize: 11, color: "var(--sub)" }}>
                 <strong>{c.author_name}</strong> · {relTime(c.created_at)} · ❤ {c.likes || 0}
                 {c.parent_id ? " · reply" : ""} ·{" "}
-                <a href={`/p/${""}`} onClick={(e) => e.preventDefault()} title={c.article_id}>
-                  {titles[c.article_id] || "article"}
-                </a>
+                {articles[c.article_id]?.slug ? (
+                  <a href={`/p/${articles[c.article_id].slug}`} target="_blank" rel="noopener" title={c.article_id}>
+                    {articles[c.article_id].title}
+                  </a>
+                ) : (
+                  <span title={c.article_id}>article</span>
+                )}
               </div>
             </div>
             <button className="adm-btn danger" onClick={() => del(c.id)}>

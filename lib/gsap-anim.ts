@@ -169,11 +169,12 @@ export function articleEntrance(articleEl: HTMLElement) {
 }
 
 // ─── Article content scroll reveals (headings, quotes, code, figures, footer, author) ───
-let cachedGlow: string | null = null;
 function glowFlash(el: Element) {
-  if (cachedGlow === null) cachedGlow = getComputedStyle(document.documentElement).getPropertyValue("--glow").trim();
-  if (!cachedGlow) return;
-  gsap.fromTo(el, { boxShadow: `0 0 16px 2px ${cachedGlow}` }, { boxShadow: "0 0 0px 0px rgba(0,0,0,0)", duration: 0.8, ease: "power2.out" });
+  // Read --glow per call (cheap; only runs on scroll-reveal) so a theme/weather
+  // palette swap doesn't leave us flashing the previous accent's stale color.
+  const glow = getComputedStyle(document.documentElement).getPropertyValue("--glow").trim();
+  if (!glow) return;
+  gsap.fromTo(el, { boxShadow: `0 0 16px 2px ${glow}` }, { boxShadow: "0 0 0px 0px rgba(0,0,0,0)", duration: 0.8, ease: "power2.out" });
 }
 
 export function articleScrollReveals(contentEl: HTMLElement) {
