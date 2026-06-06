@@ -10098,23 +10098,29 @@ body[data-mood]:not([data-mood="neutral"]) .lb-cover-img {
 }
 
 /* ── 2. Comfortable touch targets ──
-   Finger-first hit areas for the controls people actually tap. Scoped to
-   coarse pointers so mouse/desktop layouts keep their compact sizing. */
-@media (pointer: coarse) {
+   Finger-first hit areas for the controls people actually tap. Width-gated to
+   match every other mobile rule in this codebase (and so it's verifiable in
+   device emulation, where `pointer: coarse` is unreliable). */
+@media (max-width: 768px) {
   /* Top-left control cluster (theme · weather · audio) */
   .site-controls {
     padding: 4px;
   }
   .sc-btn {
-    height: 38px;
-    min-width: 38px;
-    padding: 0 11px;
+    height: 40px;
+    min-width: 40px;
+    padding: 0 12px;
+  }
+
+  /* Back button in the sticky nav — a common, easy-to-miss tap */
+  .lb-nav-back {
+    min-height: 40px;
   }
 
   /* Feed tag pills — easier to flick through and tap */
   .lb-tag-chip {
-    padding: 8px 16px;
-    min-height: 36px;
+    padding: 9px 16px;
+    min-height: 40px;
     display: inline-flex;
     align-items: center;
   }
@@ -10123,12 +10129,12 @@ body[data-mood]:not([data-mood="neutral"]) .lb-cover-img {
   .lb-share-btn,
   .lb-bookmark-btn,
   .lb-tts-btn {
-    min-height: 40px;
+    min-height: 44px;
   }
 
   /* Chat quick-reply chips render full-screen on phones — give them room */
   .bchat-chip {
-    padding: 8px 14px;
+    padding: 9px 14px;
   }
 }
 
