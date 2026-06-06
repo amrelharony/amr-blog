@@ -284,6 +284,10 @@
 html {
   color-scheme: dark;
   background: var(--bg);
+  /* Stop mobile Safari/Chrome from auto-inflating text on rotation/reflow,
+     which silently breaks the carefully-tuned responsive type scale. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {

@@ -10069,3 +10069,90 @@ body[data-mood]:not([data-mood="neutral"]) .lb-cover-img {
   content-visibility: auto;
   contain-intrinsic-size: auto 280px
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE UX OPTIMIZATION
+   Touch-first refinements layered on top of the existing breakpoints.
+   This block is intentionally last in the cascade so its equal-specificity
+   rules win over the base styles above. Everything here is gated behind a
+   small-viewport or coarse-pointer query, so the desktop experience is
+   left untouched.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Kill iOS focus-zoom ──
+   Any text field under 16px makes mobile Safari auto-zoom on focus and
+   leaves the page awkwardly scrolled. 16px is the documented threshold;
+   bumping the user-facing fields removes the jump without changing layout. */
+@media (max-width: 768px) {
+  .lb-search-bar,
+  .blog-search,
+  .blog-comment-input,
+  .lb-comment-name,
+  .lb-comment-textarea,
+  .lb-newsletter-form input,
+  .bchat-input,
+  .lb-cmd-input,
+  .lb-auth-input {
+    font-size: 16px;
+  }
+}
+
+/* ── 2. Comfortable touch targets ──
+   Finger-first hit areas for the controls people actually tap. Scoped to
+   coarse pointers so mouse/desktop layouts keep their compact sizing. */
+@media (pointer: coarse) {
+  /* Top-left control cluster (theme · weather · audio) */
+  .site-controls {
+    padding: 4px;
+  }
+  .sc-btn {
+    height: 38px;
+    min-width: 38px;
+    padding: 0 11px;
+  }
+
+  /* Feed tag pills — easier to flick through and tap */
+  .lb-tag-chip {
+    padding: 8px 16px;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* Article action row */
+  .lb-share-btn,
+  .lb-bookmark-btn,
+  .lb-tts-btn {
+    min-height: 40px;
+  }
+
+  /* Chat quick-reply chips render full-screen on phones — give them room */
+  .bchat-chip {
+    padding: 8px 14px;
+  }
+}
+
+/* ── 3. Tap feedback ──
+   No :hover on touch, so taps can feel dead. A quick press state on the
+   safe, non-animated controls makes the UI feel responsive. */
+@media (hover: none) {
+  .lb-tag-chip:active,
+  .lb-share-btn:active,
+  .lb-bookmark-btn:active,
+  .lb-tts-btn:active,
+  .lb-nav-back:active,
+  .sc-btn:active {
+    opacity: 0.55;
+  }
+}
+
+/* ── 4. Anchor offset under the sticky nav ──
+   TOC / heading-link jumps land flush under the sticky mobile nav instead
+   of hiding the target heading behind it. */
+@media (max-width: 768px) {
+  .lb-content h2,
+  .lb-content h3,
+  .lb-content h4 {
+    scroll-margin-top: 64px;
+  }
+}

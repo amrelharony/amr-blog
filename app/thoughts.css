@@ -600,3 +600,92 @@
 .light-mode .blog-trending-tag {
   color: #0066ff;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE UX OPTIMIZATION (Thoughts / microblog)
+   This page shipped without any responsive rules — its controls were
+   sized for a mouse. Below: finger-friendly hit areas, no iOS focus-zoom,
+   and a touch of breathing room on small screens.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* 16px inputs so mobile Safari doesn't zoom in on focus. */
+@media (pointer: coarse) {
+  .blog-search,
+  .blog-comment-input {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 600px) {
+  .thoughts-page {
+    padding: 0 14px 48px;
+  }
+
+  /* Roomier reaction + meta-action buttons (were ~20px tall). */
+  .blog-reaction-btn,
+  .blog-reaction-add {
+    padding: 6px 11px;
+    min-height: 34px;
+  }
+
+  .blog-post-actions {
+    gap: 14px;
+  }
+  .blog-action-btn,
+  .blog-copy-btn {
+    padding: 6px;
+    min-height: 36px;
+    min-width: 32px;
+    justify-content: center;
+    opacity: 0.7; /* slightly more visible on touch where there's no hover */
+  }
+
+  /* Filter pills + trending tags: easier to scan and tap. */
+  .blog-filter-btn,
+  .blog-trending-tag {
+    padding: 7px 13px;
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* Emoji picker — bigger targets for fat fingers. */
+  .blog-reaction-picker {
+    flex-wrap: wrap;
+    max-width: calc(100vw - 32px);
+  }
+  .blog-reaction-picker button {
+    padding: 7px;
+    font-size: 20px;
+  }
+
+  /* Comment composer */
+  .blog-comment-form {
+    gap: 8px;
+  }
+  .blog-comment-input {
+    padding: 10px 12px;
+  }
+  .blog-comment-send {
+    padding: 0 16px;
+    min-height: 40px;
+    flex-shrink: 0;
+  }
+
+  /* Keep tall portrait images from dominating the viewport. */
+  .blog-post-img {
+    max-height: 70vh;
+  }
+}
+
+/* Press feedback where there's no hover state to lean on. */
+@media (hover: none) {
+  .blog-reaction-btn:active,
+  .blog-action-btn:active,
+  .blog-copy-btn:active,
+  .blog-filter-btn:active,
+  .blog-trending-tag:active,
+  .blog-reaction-add:active {
+    opacity: 0.55;
+  }
+}
