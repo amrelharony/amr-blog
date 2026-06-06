@@ -299,6 +299,11 @@
 /* ── Mobile ── */
 @media(max-width:600px) {
   .mascot-float { width: 100px; height: 180px; top: 16px; right: 8px; }
+  /* The label is a hover-only affordance. Touch devices have no true hover, but a tap
+     leaves a sticky :hover state that reveals it — and since the mascot is pinned to the
+     right edge, the centered nowrap text spills off-screen and over the search bar.
+     Hide it on mobile (tapping the mascot opens the chat directly, so it's redundant). */
+  .mascot-float-label { display: none !important; }
   .mascot-panel {
     position: fixed; top: 0; bottom: 0; right: 0; left: 0;
     width: 100vw; height: 100vh; height: 100dvh;
