@@ -57,8 +57,9 @@ export default function Intro() {
 
     let cleanupVar: () => void = () => {};
     let finished = false;
+    let cancelled = false;
     const wipe = () => {
-      if (finished) return;
+      if (finished || cancelled) return;
       finished = true;
       try {
         cleanupVar();
@@ -97,7 +98,7 @@ export default function Intro() {
     }
 
     runRes.done.then(() => {
-      if (!finished) wipe();
+      if (!finished && !cancelled) wipe();
     });
 
     const skip = () => wipe();
@@ -108,6 +109,7 @@ export default function Intro() {
     const safety = window.setTimeout(wipe, 6000);
 
     return () => {
+      cancelled = true;
       try {
         cleanupVar();
       } catch {}

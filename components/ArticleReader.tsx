@@ -46,11 +46,12 @@ export default function ArticleReader({ slug }: { slug: string }) {
         const items = headings.map((h) => {
           const text = (h.textContent || "").trim();
           const base = h.id || slugify(text) || "section";
+          // Loop until the id is unused, and record the *final* id — otherwise a real
+          // heading whose slug equals a generated suffix (e.g. "intro-2") could collide.
           let id = base;
-          if (used[id]) {
-            used[id]++;
-            id = base + "-" + used[id];
-          } else used[id] = 1;
+          let n = 1;
+          while (used[id]) id = base + "-" + ++n;
+          used[id] = 1;
           h.id = id;
           return { id, text, depth: h.tagName === "H3" ? 3 : 2 };
         });

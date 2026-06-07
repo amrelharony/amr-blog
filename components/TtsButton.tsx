@@ -16,9 +16,26 @@ export default function TtsButton() {
   const playingRef = useRef(false);
   const idxRef = useRef(0);
   const speedRef = useRef(1);
+  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
+  // Bumped whenever we cancel/restart speech, so a stale utterance's async `onend`
+  // (which fires even on cancel() in Chromium) can't advance to the next sentence.
+  const genRef = useRef(0);
 
   useEffect(() => {
     setSupported(typeof window !== "undefined" && "speechSynthesis" in window);
+  }, []);
+
+  // Voices populate asynchronously in Chromium — getVoices() is [] on first call
+  // until `voiceschanged` fires. Cache them so speakAt can pick the preferred voice.
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const load = () => {
+      const v = speechSynthesis.getVoices();
+      if (v.length) voicesRef.current = v;
+    };
+    load();
+    speechSynthesis.addEventListener?.("voiceschanged", load);
+    return () => speechSynthesis.removeEventListener?.("voiceschanged", load);
   }, []);
   useEffect(() => {
     speedRef.current = speed;
@@ -48,13 +65,15 @@ export default function TtsButton() {
     const u = new SpeechSynthesisUtterance(list[i].text);
     u.rate = speedRef.current;
     u.lang = "en-US";
-    const voices = speechSynthesis.getVoices();
+    const voices = voicesRef.current.length ? voicesRef.current : speechSynthesis.getVoices();
     const v =
       voices.find((x) => x.name.includes("Google") && x.lang.startsWith("en")) ||
       voices.find((x) => x.lang.startsWith("en"));
     if (v) u.voice = v;
+    const myGen = ++genRef.current;
     u.onend = () => {
-      if (playingRef.current) speakAt(idxRef.current + 1);
+      // Ignore the end event from an utterance we've since cancelled/superseded.
+      if (playingRef.current && myGen === genRef.current) speakAt(idxRef.current + 1);
     };
     speechSynthesis.speak(u);
   };
@@ -73,6 +92,7 @@ export default function TtsButton() {
     speakAt(0);
   };
   const stop = () => {
+    genRef.current++;
     playingRef.current = false;
     setPlaying(false);
     setPaused(false);
@@ -82,6 +102,8 @@ export default function TtsButton() {
     clearHighlights();
   };
   const togglePause = () => {
+    // Nothing to pause/resume between utterances — keep the icon in sync with reality.
+    if (!speechSynthesis.speaking && !speechSynthesis.paused) return;
     if (speechSynthesis.paused) {
       speechSynthesis.resume();
       setPaused(false);
@@ -91,6 +113,7 @@ export default function TtsButton() {
     }
   };
   const jump = (i: number) => {
+    genRef.current++;
     try {
       speechSynthesis.cancel();
     } catch {}
