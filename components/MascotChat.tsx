@@ -146,20 +146,24 @@ export default function MascotChat() {
     setSuggestions(location.pathname.startsWith("/p/") ? ARTICLE_CHIPS : TOPICS);
     const t = setTimeout(() => inputRef.current?.focus(), 120);
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    const onDoc = (e: MouseEvent) => {
+    // Outside-click closes — but on `pointerdown`, which fires BEFORE React
+    // re-renders on the click. (On `click`, sending a message re-renders first and
+    // detaches the clicked node — e.g. a suggestion chip or the input row — so
+    // panel.contains() returned false and misread an in-panel click as "outside".)
+    const onDoc = (e: PointerEvent) => {
       const tgt = e.target as Node;
       if (panelRef.current?.contains(tgt)) return;
       if (document.querySelector(".mascot-float")?.contains(tgt)) return;
       setOpen(false);
     };
     window.addEventListener("keydown", onKey);
-    // delay outside-click so the opening click doesn't immediately close it
-    const dt = setTimeout(() => document.addEventListener("click", onDoc), 50);
+    // delay outside-click so the opening interaction doesn't immediately close it
+    const dt = setTimeout(() => document.addEventListener("pointerdown", onDoc), 50);
     return () => {
       clearTimeout(t);
       clearTimeout(dt);
       window.removeEventListener("keydown", onKey);
-      document.removeEventListener("click", onDoc);
+      document.removeEventListener("pointerdown", onDoc);
     };
   }, [open]);
 
