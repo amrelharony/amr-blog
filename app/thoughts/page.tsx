@@ -23,9 +23,9 @@ export default async function ThoughtsPage() {
             <i className="fa-solid fa-arrow-left" aria-hidden="true" /> <span>Articles</span>
           </Link>
           <span className="lb-nav-sep" aria-hidden="true" />
-          <Link className="lb-nav-brand" href="/" role="link">
+          <a className="lb-nav-brand" href="https://amrelharony.com" role="link">
             AMR ELHARONY
-          </Link>
+          </a>
         </div>
       </nav>
 

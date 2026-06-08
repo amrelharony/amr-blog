@@ -9549,7 +9549,9 @@ body[data-mood]:not([data-mood="neutral"]) .lb-cover-img {
 
   .lb-nav {
     margin: 0;
-    padding: 10px 14px;
+    /* Clear the fixed .site-controls bar (top:14px, ~38px tall → bottom ≈52px),
+       which otherwise overlaps the brand/back link on the full-width mobile nav. */
+    padding: 56px 14px 12px;
     border-radius: 0;
     gap: 10px;
     position: sticky;

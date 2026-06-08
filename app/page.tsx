@@ -36,9 +36,9 @@ export default async function FeedPage() {
     <div className="lb-wrap" style={{ maxWidth: 900 }}>
       <nav className="lb-nav" role="navigation" aria-label="Blog navigation">
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <Link className="lb-nav-brand" href="/" role="link">
+          <a className="lb-nav-brand" href="https://amrelharony.com" role="link">
             AMR ELHARONY
-          </Link>
+          </a>
         </div>
         <a className="lb-rss-btn" href="/feed.xml" title="RSS Feed">
           <i className="fa-solid fa-rss" /> <span>RSS</span>
