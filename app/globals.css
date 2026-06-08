@@ -265,6 +265,11 @@
 .bchat-send { width: 42px; flex-shrink: 0; border-radius: 12px; border: 1px solid var(--accent); background: var(--glowS); color: var(--accent); cursor: pointer; font-size: 14px; transition: filter 0.2s, opacity 0.2s; }
 .bchat-send:hover:not(:disabled) { filter: brightness(1.25); }
 .bchat-send:disabled { opacity: 0.4; cursor: default; }
+.bchat-mic { width: 42px; flex-shrink: 0; border-radius: 12px; border: 1px solid var(--border); background: var(--glow); color: var(--sub); cursor: pointer; font-size: 14px; display: grid; place-items: center; transition: color 0.2s, border-color 0.2s, background 0.2s, box-shadow 0.2s; }
+.bchat-mic:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.bchat-mic:disabled { opacity: 0.4; cursor: default; }
+.bchat-mic.recording { color: #fca5a5; border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.12); animation: bchatMicPulse 1s ease-in-out infinite; }
+@keyframes bchatMicPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); } 50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); } }
 .bchat-foot { display: flex; justify-content: space-between; align-items: center; padding: 6px 14px 9px; font-family: "JetBrains Mono", monospace; font-size: 9px; letter-spacing: 0.5px; color: var(--sub); }
 .bchat-badge { color: var(--accent); opacity: 0.85; }
 @media (max-width: 600px) {

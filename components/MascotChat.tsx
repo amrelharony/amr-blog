@@ -86,6 +86,27 @@ async function findSources(q: string): Promise<Source[]> {
 
 const HISTORY_KEY = "amr_chat_history";
 
+// Minimal Web Speech API shapes (not in the standard DOM lib) for voice input.
+type SpeechRecognitionResultLike = { isFinal: boolean; 0: { transcript: string } };
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: ArrayLike<SpeechRecognitionResultLike>;
+}
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((e: SpeechRecognitionEventLike) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+type SpeechWindow = Window & {
+  SpeechRecognition?: { new (): SpeechRecognitionLike };
+  webkitSpeechRecognition?: { new (): SpeechRecognitionLike };
+};
+
 export default function MascotChat() {
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -98,6 +119,12 @@ export default function MascotChat() {
   const histRef = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
+  const [listening, setListening] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const silenceTimerRef = useRef<number | null>(null);
+  const finalTranscriptRef = useRef("");
+  const sendRef = useRef<(raw: string) => void>(() => {});
 
   // Open hooks for the mascot.
   useEffect(() => {
@@ -198,6 +225,30 @@ export default function MascotChat() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [msgs, streaming]);
 
+  // Keep the latest send() reachable from the speech-recognition auto-submit timer.
+  useEffect(() => {
+    sendRef.current = send;
+  });
+
+  // Voice input is gated on browser support (Chrome/Edge/Safari Web Speech API).
+  useEffect(() => {
+    const sw = window as unknown as SpeechWindow;
+    setVoiceSupported(!!(sw.SpeechRecognition || sw.webkitSpeechRecognition));
+  }, []);
+
+  // Stop listening (and the pending auto-submit) whenever the panel closes.
+  useEffect(() => {
+    if (open) return;
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    try {
+      recognitionRef.current?.stop();
+    } catch {}
+    setListening(false);
+  }, [open]);
+
   const updateLast = (patch: Partial<Msg>) =>
     setMsgs((m) => {
       if (!m.length) return m;
@@ -209,6 +260,13 @@ export default function MascotChat() {
   async function send(raw: string) {
     const q = raw.trim();
     if (!q || streamingRef.current) return;
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    try {
+      recognitionRef.current?.stop();
+    } catch {}
     setInput("");
     setSuggestions([]);
     setMsgs((m) => [...m, { role: "user", text: q }, { role: "assistant", text: "" }]);
@@ -285,6 +343,65 @@ export default function MascotChat() {
     }
   }
 
+  // Voice input (Web Speech API) — transcribes into the field and, like the main
+  // site, auto-sends 2s after the last finalized phrase.
+  function startVoice() {
+    const sw = window as unknown as SpeechWindow;
+    const SR = sw.SpeechRecognition || sw.webkitSpeechRecognition;
+    if (!SR) return;
+    let rec = recognitionRef.current;
+    if (!rec) {
+      rec = new SR();
+      rec.continuous = false;
+      rec.interimResults = true;
+      rec.lang = "en-US";
+      rec.onresult = (e) => {
+        let interim = "";
+        let final = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const r = e.results[i];
+          if (r.isFinal) final += r[0].transcript;
+          else interim += r[0].transcript;
+        }
+        setInput(final || interim);
+        if (final) {
+          finalTranscriptRef.current = final;
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = window.setTimeout(() => {
+            setListening(false);
+            try {
+              recognitionRef.current?.stop();
+            } catch {}
+            sendRef.current(inputRef.current?.value || finalTranscriptRef.current);
+          }, 2000);
+        }
+      };
+      rec.onend = () => setListening(false);
+      rec.onerror = () => setListening(false);
+      recognitionRef.current = rec;
+    }
+    try {
+      finalTranscriptRef.current = "";
+      rec.start();
+      setListening(true);
+    } catch {}
+  }
+
+  function toggleVoice() {
+    if (listening) {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
+      setListening(false);
+    } else {
+      startVoice();
+    }
+  }
+
   const newChat = () => {
     setMsgs([]);
     histRef.current = [];
@@ -355,12 +472,25 @@ export default function MascotChat() {
           send(input);
         }}
       >
+        {voiceSupported && (
+          <button
+            type="button"
+            className={"bchat-mic" + (listening ? " recording" : "")}
+            onClick={toggleVoice}
+            disabled={streaming}
+            aria-pressed={listening}
+            title={listening ? "Stop voice input" : "Voice input"}
+            aria-label={listening ? "Stop voice input" : "Start voice input"}
+          >
+            <i className={"fa-solid " + (listening ? "fa-stop" : "fa-microphone")} aria-hidden="true" />
+          </button>
+        )}
         <input
           ref={inputRef}
           className="bchat-input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask me anything…"
+          placeholder={listening ? "Listening…" : "Ask me anything…"}
           maxLength={500}
           aria-label="Message"
         />
