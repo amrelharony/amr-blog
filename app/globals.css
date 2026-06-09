@@ -212,6 +212,18 @@ body .mascot-float {
 
 /* ── Bespoke blog-native chat panel (.bchat-*) — replaces the third-party widget.
    Accent tints use --glow/--glowS so the panel follows dark/light + the weather accent. ── */
+/* Dim scrim behind the chat so the page doesn't bleed through the panel. */
+.bchat-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 9989;
+  background: rgba(3, 6, 12, 0.58);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: bchatScrimIn 0.25s ease;
+}
+.light-mode .bchat-scrim { background: rgba(15, 23, 42, 0.38); }
+@keyframes bchatScrimIn { from { opacity: 0; } to { opacity: 1; } }
 .bchat-panel {
   position: fixed;
   top: 296px;
@@ -285,10 +297,11 @@ body .mascot-float {
 .bchat-foot { display: flex; justify-content: space-between; align-items: center; padding: 6px 14px 9px; font-family: "JetBrains Mono", monospace; font-size: 9px; letter-spacing: 0.5px; color: var(--sub); }
 .bchat-badge { color: var(--accent); opacity: 0.85; }
 @media (max-width: 600px) {
-  .bchat-panel { position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: 100vw; max-height: 100dvh; border-radius: 0; }
+  /* Full-screen sheet — solid background so the page never shows through. */
+  .bchat-panel { position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: 100vw; max-height: 100dvh; border-radius: 0; background: var(--bg); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .bchat-panel { animation: none; }
+  .bchat-panel, .bchat-scrim { animation: none; }
   .bchat-typing span, .bchat-cursor { animation: none; }
 }
 

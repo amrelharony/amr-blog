@@ -418,7 +418,9 @@ export default function MascotChat() {
   if (!open) return null;
   const showWelcome = msgs.length === 0;
   return (
-    <div className="bchat-panel" ref={panelRef} role="dialog" aria-label="Chat with ElharonyClaw">
+    <>
+      <div className="bchat-scrim" onClick={() => setOpen(false)} aria-hidden="true" />
+      <div className="bchat-panel" ref={panelRef} role="dialog" aria-modal="true" aria-label="Chat with ElharonyClaw">
       <div className="bchat-bar" />
       <header className="bchat-header">
         <div className="bchat-avatar" aria-hidden="true">✦</div>
@@ -505,6 +507,7 @@ export default function MascotChat() {
         <span className="bchat-badge">GLM · KB-grounded</span>
         {limits && <span>{limits.daily}/{limits.dailyMax} today</span>}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
