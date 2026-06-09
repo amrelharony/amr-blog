@@ -109,6 +109,12 @@
 .mascot-float {
   opacity: 1 !important;
 }
+/* Sit the mascot just below the compact top-right controls bar. Higher specificity
+   than the injected `.mascot-float` rule wins as the default, while a drag still sets
+   inline top/left (inline beats any selector), so dragging keeps working. */
+body .mascot-float {
+  top: 54px;
+}
 
 @media (pointer: coarse) {
   .cg,
@@ -154,19 +160,24 @@
   pointer-events: none;
 }
 .bi-inner {
-  width: min(440px, 84vw);
+  width: min(560px, 90vw);
   text-align: center;
 }
 .bi-word {
   font-family: "JetBrains Mono", monospace;
-  font-size: clamp(9px, 3.2vw, 13px);
+  /* Big, readable wordmark that wraps the long title across lines instead of
+     shrinking it to fit one line (was clamp(9px,3.2vw,13px) + nowrap — tiny). */
+  font-size: clamp(30px, 8.5vw, 58px);
+  line-height: 1.12;
   font-weight: 700;
-  letter-spacing: 3px;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
   color: var(--accent);
-  text-shadow: 0 0 18px var(--glowS);
-  min-height: 1.4em;
-  white-space: nowrap;
+  text-shadow: 0 0 22px var(--glowS);
+  min-height: 1.2em;
+  white-space: normal;
+  max-width: min(620px, 92vw);
+  margin: 0 auto;
 }
 .bi-sweep {
   height: 2px;
@@ -321,14 +332,14 @@ img {
 /* One slim frosted group, pinned top-left (clear of the top-right mascot). */
 .site-controls {
   position: fixed;
-  top: 14px;
-  left: 14px;
+  top: 10px;
+  right: 12px;
   z-index: 1000;
   display: flex;
   align-items: stretch;
   gap: 0;
-  padding: 3px;
-  border-radius: 11px;
+  padding: 2px;
+  border-radius: 9px;
   border: 1px solid var(--border);
   background: var(--card);
   -webkit-backdrop-filter: blur(14px) saturate(150%);
@@ -337,9 +348,9 @@ img {
 }
 .sc-btn {
   position: relative;
-  height: 30px;
-  min-width: 30px;
-  padding: 0 9px;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 8px;
   border: 0;
   background: transparent;
   color: var(--text);
@@ -349,9 +360,9 @@ img {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 12px;
   font-family: "JetBrains Mono", monospace;
-  border-radius: 8px;
+  border-radius: 7px;
   transition: opacity 0.2s, color 0.2s, background-color 0.2s;
 }
 /* subtle hairline divider between grouped controls */
@@ -373,6 +384,6 @@ img {
   color: var(--accent);
 }
 .sc-weather {
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.2px;
 }

@@ -3,6 +3,7 @@ import { getFeedArticles } from "@/lib/queries/articles";
 import { fmtDate } from "@/lib/format";
 import type { ArticleCard } from "@/lib/types";
 import FeedAnimations from "@/components/FeedAnimations";
+import FeedTitle from "@/components/FeedTitle";
 import FeedSearch from "@/components/FeedSearch";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import ContinueReading from "@/components/ContinueReading";
@@ -46,11 +47,7 @@ export default async function FeedPage() {
       </nav>
 
       <header className="lb-feed-header lb-reveal">
-        <h1 className="lb-feed-title">
-          THE BILINGUAL
-          <br />
-          EXECUTIVE BLOG
-        </h1>
+        <FeedTitle />
         <p className="lb-feed-sub">DEEP DIVES ON AGILE, FINTECH, AND DIGITAL TRANSFORMATION</p>
         <div className="lb-feed-line" aria-hidden="true" />
       </header>

@@ -6,6 +6,15 @@ import { WORDMARK } from "../types";
 // the wordmark (target points sampled from rasterized text), hold, then disperse upward.
 interface P { x: number; y: number; tx: number; ty: number; vx: number; vy: number; }
 
+// Wrap the wordmark into balanced lines so a long title rasterizes large instead of
+// being shrunk to fit one line.
+function wrapWordmark(text: string): string[] {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= 1) return [text];
+  const mid = Math.ceil(words.length / 2);
+  return [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
+}
+
 function run(ctx: IntroCtx): IntroRun {
   const { root, pal } = ctx;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -25,12 +34,16 @@ function run(ctx: IntroCtx): IntroRun {
   off.width = W;
   off.height = H;
   const og = off.getContext("2d")!;
-  const fontSize = Math.max(18, Math.min(64, Math.floor(W / (WORDMARK.length * 0.62))));
+  const lines = wrapWordmark(WORDMARK);
+  const maxLen = Math.max(...lines.map((l) => l.length));
+  const fontSize = Math.max(30, Math.min(ctx.desktop ? 112 : 66, Math.floor(W / (maxLen * 0.64))));
   og.fillStyle = "#fff";
   og.textAlign = "center";
   og.textBaseline = "middle";
   og.font = `700 ${fontSize}px "JetBrains Mono", monospace`;
-  og.fillText(WORDMARK, W / 2, H / 2);
+  const lineH = fontSize * 1.18;
+  const startY = H / 2 - ((lines.length - 1) * lineH) / 2;
+  lines.forEach((ln, i) => og.fillText(ln, W / 2, startY + i * lineH));
   const img = og.getImageData(0, 0, W, H).data;
 
   const targets: Array<[number, number]> = [];
@@ -41,7 +54,7 @@ function run(ctx: IntroCtx): IntroRun {
     }
   }
   // cap point count for perf
-  const MAX = ctx.desktop ? 1400 : 700;
+  const MAX = ctx.desktop ? 2000 : 950;
   while (targets.length > MAX) targets.splice((Math.random() * targets.length) | 0, 1);
 
   const parts: P[] = targets.map(([tx, ty]) => {
