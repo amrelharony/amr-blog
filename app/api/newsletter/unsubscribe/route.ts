@@ -1,5 +1,6 @@
 // Newsletter unsubscribe — ported from api/newsletter-unsubscribe.js.
 import { NextRequest } from "next/server";
+import { isUuid } from "@/lib/security";
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -22,7 +23,7 @@ a.btn{display:inline-block;padding:12px 28px;background:#00e1ff;color:#0a0e17;fo
 export async function GET(req: NextRequest) {
   const token = new URL(req.url).searchParams.get("token");
   // Tokens are UUIDs — reject malformed input before it reaches the RPC.
-  if (!token || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)) {
+  if (!isUuid(token)) {
     return page("Invalid Link", `<div class="icon">⚠️</div><div class="title">Invalid Link</div><div class="sub">This unsubscribe link is missing or malformed.</div><a class="btn" href="${SITE}">Go to Blog</a>`);
   }
   try {

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createPublicClient } from "@/lib/supabase/public";
 import { renderArticleHtml } from "@/lib/markdown/parse";
 import { fmtDate, readingTime } from "@/lib/format";
+import { isUuid } from "@/lib/security";
 import ReviewComments from "@/components/ReviewComments";
 
 export const metadata: Metadata = {
@@ -16,7 +17,7 @@ type Params = { params: Promise<{ token: string }> };
 export default async function ReviewPage({ params }: Params) {
   const { token } = await params;
   // Review tokens are UUIDs — reject malformed input before it reaches the RPC.
-  const validToken = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token);
+  const validToken = isUuid(token);
   const sb = createPublicClient();
   const { data } = validToken
     ? await sb.rpc("get_review_by_token", { p_token: token })

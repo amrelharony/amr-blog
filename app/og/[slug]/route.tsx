@@ -11,22 +11,24 @@ const WIDTH = 1200;
 const HEIGHT = 630;
 
 // Satori needs ttf/otf — the css2 endpoint only serves them to old UAs.
-// Cached per process; null = fetch failed, render with the built-in font.
-let fontData: ArrayBuffer | null | undefined;
+// The promise is cached (not the result) so concurrent cold requests share
+// one fetch; null = fetch failed, render with the built-in font.
+let fontPromise: Promise<ArrayBuffer | null> | null = null;
 
-async function loadFont(): Promise<ArrayBuffer | null> {
-  if (fontData !== undefined) return fontData;
-  try {
-    const css = await fetch(
-      "https://fonts.googleapis.com/css2?family=Inter:wght@700&display=swap",
-      { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/534" } },
-    ).then((r) => r.text());
-    const url = css.match(/src:\s*url\((https:[^)]+\.ttf)\)/)?.[1];
-    fontData = url ? await fetch(url).then((r) => r.arrayBuffer()) : null;
-  } catch {
-    fontData = null;
-  }
-  return fontData ?? null;
+function loadFont(): Promise<ArrayBuffer | null> {
+  fontPromise ??= (async () => {
+    try {
+      const css = await fetch(
+        "https://fonts.googleapis.com/css2?family=Inter:wght@700&display=swap",
+        { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/534" } },
+      ).then((r) => r.text());
+      const url = css.match(/src:\s*url\((https:[^)]+\.ttf)\)/)?.[1];
+      return url ? await fetch(url).then((r) => r.arrayBuffer()) : null;
+    } catch {
+      return null;
+    }
+  })();
+  return fontPromise;
 }
 
 export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }> }) {

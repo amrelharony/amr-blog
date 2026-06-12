@@ -81,9 +81,10 @@ export default function FeedSearch() {
     }
     debounceRef.current = window.setTimeout(async () => {
       try {
-        // PostgREST `or` args are comma/paren-delimited — strip both from the
-        // pattern so user input can't break the filter expression.
-        const safe = query.replace(/[%,()]/g, " ").trim();
+        // PostgREST `or` args are comma/paren-delimited, and %/*/_ are ilike
+        // wildcards — strip them all so user input searches literally and
+        // can't break the filter expression.
+        const safe = query.replace(/[%_*,()]/g, " ").trim();
         if (!safe) return;
         const { data } = await getBrowserClient()
           .from("longform_articles")
@@ -97,7 +98,18 @@ export default function FeedSearch() {
             (el) => el.dataset.id,
           ),
         );
-        setServerHits(((data ?? []) as ArticleCard[]).filter((a) => !onPage.has(a.id)));
+        const hits = ((data ?? []) as ArticleCard[]).filter((a) => !onPage.has(a.id));
+        setServerHits(hits);
+        // The DOM-filter effect's empty message promised an archive search —
+        // settle it now that the result is known.
+        const emptyEl = document.querySelector("#lbGrid .lb-empty");
+        if (emptyEl) {
+          emptyEl.innerHTML =
+            '<div class="lb-empty-icon">🔍</div>' +
+            (hits.length
+              ? "No loaded articles match — archive results below."
+              : "No articles match your search.");
+        }
       } catch {
         setServerHits([]);
       }

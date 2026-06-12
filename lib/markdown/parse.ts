@@ -37,7 +37,13 @@ function parseMarkdown(md: string | null | undefined): string {
 
 /** Full article body pipeline → sanitized, embed-ready HTML string. */
 export async function renderArticleHtml(md: string | null | undefined): Promise<string> {
-  hl = await getHighlighter();
+  try {
+    hl = await getHighlighter();
+  } catch {
+    // Highlighter init failed — render anyway; marked's default code renderer
+    // (escaped <pre><code>) takes over via the `false` branch above.
+    hl = null;
+  }
   const html = processFootnotes(processGalleries(parseMarkdown(md)));
   return sanitizeHtml(html);
 }

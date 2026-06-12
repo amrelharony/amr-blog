@@ -36,12 +36,23 @@ const LANG_ALIASES: Record<string, string> = {
 };
 
 let highlighterPromise: Promise<Highlighter> | null = null;
+let loadedLangs: Set<string> | null = null;
 
 export function getHighlighter(): Promise<Highlighter> {
   highlighterPromise ??= createHighlighter({
     themes: [DARK_THEME, LIGHT_THEME],
     langs: [...LANGS],
-  });
+  })
+    .then((hl) => {
+      loadedLangs = new Set(hl.getLoadedLanguages());
+      return hl;
+    })
+    .catch((err) => {
+      // Don't cache the rejection — a one-off init failure would otherwise
+      // poison every article render in this process until restart.
+      highlighterPromise = null;
+      throw err;
+    });
   return highlighterPromise;
 }
 
@@ -55,7 +66,8 @@ export function highlightCodeBlock(hl: Highlighter, code: string, infoString?: s
   const lang = LANG_ALIASES[requested] || requested;
   let html: string;
   try {
-    if (!lang || !hl.getLoadedLanguages().includes(lang)) throw new Error("unloaded lang");
+    const known = loadedLangs ?? new Set(hl.getLoadedLanguages());
+    if (!lang || !known.has(lang)) throw new Error("unloaded lang");
     html = hl.codeToHtml(code, {
       lang,
       themes: { dark: DARK_THEME, light: LIGHT_THEME },
