@@ -1,6 +1,7 @@
 // Biweekly newsletter digest — ported from api/newsletter-bulletin.js.
 // GET = Vercel cron (CRON_SECRET / vercel-cron UA). POST = manual (NEWSLETTER_ADMIN_SECRET).
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeCompare } from "@/lib/security";
 
 export const maxDuration = 60;
 
@@ -108,7 +109,12 @@ export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const ua = (req.headers.get("user-agent") || "").toLowerCase();
   const auth = req.headers.get("authorization") || "";
-  if (!(ua.startsWith("vercel-cron/") || (cronSecret && auth === `Bearer ${cronSecret}`)))
+  if (
+    !(
+      ua.startsWith("vercel-cron/") ||
+      (cronSecret && timingSafeCompare(auth, `Bearer ${cronSecret}`))
+    )
+  )
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     return await send(req);
@@ -119,7 +125,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const secret = process.env.NEWSLETTER_ADMIN_SECRET;
-  if (!secret || req.headers.get("x-admin-secret") !== secret)
+  if (!timingSafeCompare(req.headers.get("x-admin-secret"), secret))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     return await send(req);

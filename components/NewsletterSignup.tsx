@@ -51,16 +51,47 @@ export default function NewsletterSignup() {
         New articles on Agile, FinTech &amp; Digital Transformation — straight to your inbox. Corporate email required.
       </div>
       <form className="lb-newsletter-form" onSubmit={submit}>
-        <input type="email" required placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input
+          type="email"
+          required
+          placeholder="you@company.com"
+          aria-label="Work email address"
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
         <div className="lb-newsletter-fields">
-          <input type="text" required placeholder="Job title" value={job} onChange={(e) => setJob(e.target.value)} />
-          <input type="tel" placeholder="Phone (optional)" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <input
+            type="text"
+            required
+            placeholder="Job title"
+            aria-label="Job title"
+            autoComplete="organization-title"
+            value={job}
+            onChange={(e) => setJob(e.target.value)}
+          />
+          <input
+            type="tel"
+            placeholder="Phone (optional)"
+            aria-label="Phone number (optional)"
+            autoComplete="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
         </div>
         <button type="submit" disabled={busy}>
           {busy ? "…" : "Subscribe"}
         </button>
       </form>
-      {status && <div className={"lb-newsletter-status visible" + (status.err ? " error" : "")}>{status.t}</div>}
+      {status && (
+        <div
+          className={"lb-newsletter-status visible" + (status.err ? " error" : "")}
+          role="status"
+          aria-live="polite"
+        >
+          {status.t}
+        </div>
+      )}
     </div>
   );
 }

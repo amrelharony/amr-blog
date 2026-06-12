@@ -72,7 +72,10 @@ export default function RootLayout({
           <link rel="stylesheet" href={FONTS_URL} />
           <link rel="stylesheet" href={FA_URL} />
         </noscript>
-        {children}
+        <a className="lb-skip-link" href="#main-content">
+          Skip to content
+        </a>
+        <div id="main-content">{children}</div>
         <SiteControls />
         <CustomCursor />
         <HolidayEngine />
