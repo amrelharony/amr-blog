@@ -60,10 +60,19 @@ export function processFootnotes(html: string): string {
     return "";
   });
 
-  html = html.replace(refRegex, (_m, id: string) => {
-    if (!refs[id]) return `[^${id}]`;
-    return `<sup><a href="#fn-${id}" class="lb-fn-ref" data-fn="${esc(id)}" data-fn-text="${esc(refs[id])}">${id}</a></sup>`;
-  });
+  // Replace refs only OUTSIDE <pre> blocks — code legitimately contains
+  // [^...] patterns (regexes, array indexing) that must not become links.
+  html = html
+    .split(/(<pre[\s\S]*?<\/pre>)/g)
+    .map((chunk, i) =>
+      i % 2
+        ? chunk
+        : chunk.replace(refRegex, (_m, id: string) => {
+            if (!refs[id]) return `[^${id}]`;
+            return `<sup><a href="#fn-${id}" class="lb-fn-ref" data-fn="${esc(id)}" data-fn-text="${esc(refs[id])}">${id}</a></sup>`;
+          }),
+    )
+    .join("");
 
   if (Object.keys(refs).length) {
     html += '<div class="lb-footnotes"><div class="lb-footnotes-title">Footnotes</div>';
