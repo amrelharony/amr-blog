@@ -10,6 +10,17 @@ export const metadata: Metadata = {
   title: "Thoughts",
   description: "Short-form thoughts on Agile, FinTech, and Data by Amr Elharony.",
   alternates: { canonical: "/thoughts" },
+  openGraph: {
+    type: "website",
+    title: "Thoughts",
+    description: "Short-form thoughts on Agile, FinTech, and Data by Amr Elharony.",
+    url: "/thoughts",
+  },
+  twitter: {
+    card: "summary",
+    title: "Thoughts",
+    description: "Short-form thoughts on Agile, FinTech, and Data by Amr Elharony.",
+  },
 };
 
 export default async function ThoughtsPage() {

@@ -9,6 +9,7 @@ import {
 } from "@/lib/queries/articles";
 import { renderArticleHtml } from "@/lib/markdown/parse";
 import { fmtDate, readingTime } from "@/lib/format";
+import { breadcrumbJsonLd } from "@/lib/seo";
 import ArticleAnimations from "@/components/ArticleAnimations";
 import ArticleReader from "@/components/ArticleReader";
 import ArticleEngagement from "@/components/ArticleEngagement";
@@ -35,6 +36,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const a = await getArticleBySlug(slug);
   if (!a) return { title: "Not found", robots: { index: false } };
   const description = a.excerpt || a.title;
+  // Editorial cover wins; otherwise fall back to the generated card so every
+  // article has a valid 1200×630 social image (app/og/[slug]/route.tsx).
+  const ogImage = {
+    url: a.cover_image || `/og/${encodeURIComponent(a.slug)}`,
+    width: 1200,
+    height: 630,
+  };
   return {
     title: a.title,
     description,
@@ -44,7 +52,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       title: a.title,
       description,
       url: `/p/${a.slug}`,
-      images: a.cover_image ? [{ url: a.cover_image, width: 1200, height: 630 }] : undefined,
+      images: [ogImage],
       publishedTime: a.created_at,
       modifiedTime: a.updated_at,
       tags: a.tags,
@@ -53,7 +61,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       card: "summary_large_image",
       title: a.title,
       description,
-      images: a.cover_image ? [a.cover_image] : undefined,
+      images: [ogImage],
     },
   };
 }
@@ -84,11 +92,22 @@ export default async function ArticlePage({ params }: Params) {
     description: a.excerpt || a.title,
     datePublished: a.created_at,
     dateModified: a.updated_at,
-    ...(a.cover_image ? { image: a.cover_image } : {}),
+    image: a.cover_image || `${siteUrl}/og/${encodeURIComponent(a.slug)}`,
     author: { "@type": "Person", name: "Amr Elharony", url: "https://amrelharony.com" },
+    publisher: {
+      "@type": "Organization",
+      name: "Amr Elharony",
+      url: "https://amrelharony.com",
+      logo: { "@type": "ImageObject", url: `${siteUrl}/profile.jpg` },
+    },
     mainEntityOfPage: url,
     ...(a.tags?.length ? { keywords: a.tags.join(", ") } : {}),
   };
+
+  const breadcrumbs = breadcrumbJsonLd([
+    { name: "Articles", url: `${siteUrl}/` },
+    { name: a.title, url },
+  ]);
 
   return (
     <div className="lb-wrap">
@@ -96,6 +115,10 @@ export default async function ArticlePage({ params }: Params) {
         type="application/ld+json"
         // Escape `<` so a title/excerpt containing "</script>" can't break out of the tag.
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbs).replace(/</g, "\\u003c") }}
       />
       <nav className="lb-nav" role="navigation" aria-label="Article navigation">
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>

@@ -25,7 +25,13 @@ export const metadata: Metadata = {
     template: "%s · Amr Elharony",
   },
   description: "Articles and thoughts by Amr Elharony.",
-  alternates: { canonical: "/", types: { "application/rss+xml": "/feed.xml" } },
+  alternates: {
+    canonical: "/",
+    types: {
+      "application/rss+xml": "/feed.xml",
+      "application/feed+json": "/feed.json",
+    },
+  },
 };
 
 export const viewport: Viewport = { themeColor: "#06080f" };
