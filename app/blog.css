@@ -3108,58 +3108,26 @@ body:has(.challenge-hud.show) .lb-reading-panel {
   border: none
 }
 
-/* â”€â”€ Prism Token Colors (Dark Mode) â”€â”€ */
-.lb-content pre .token.comment,
-.lb-content pre .token.prolog,
-.lb-content pre .token.doctype,
-.lb-content pre .token.cdata {
-  color: #6b7a90
+/* â”€â”€ Shiki Token Colors â”€â”€ */
+/* Server-side shiki highlighting emits dual-theme custom props
+   (--shiki-dark / --shiki-light) per token; pick one per site theme.
+   The pre keeps the brand background from .lb-content pre above. */
+.lb-content pre.shiki {
+  color: var(--shiki-dark, #a5f3fc)
 }
 
-.lb-content pre .token.punctuation {
-  color: #8b949e
+.lb-content pre.shiki span[style] {
+  color: var(--shiki-dark)
 }
 
-.lb-content pre .token.property,
-.lb-content pre .token.tag,
-.lb-content pre .token.boolean,
-.lb-content pre .token.number,
-.lb-content pre .token.constant,
-.lb-content pre .token.symbol,
-.lb-content pre .token.deleted {
-  color: #f97583
+.light-mode .lb-content pre.shiki,
+.lb-sepia .lb-content pre.shiki {
+  color: var(--shiki-light, #24292e)
 }
 
-.lb-content pre .token.selector,
-.lb-content pre .token.attr-name,
-.lb-content pre .token.string,
-.lb-content pre .token.char,
-.lb-content pre .token.builtin,
-.lb-content pre .token.inserted {
-  color: #a5d6ff
-}
-
-.lb-content pre .token.operator,
-.lb-content pre .token.entity,
-.lb-content pre .token.url {
-  color: #79c0ff
-}
-
-.lb-content pre .token.atrule,
-.lb-content pre .token.attr-value,
-.lb-content pre .token.keyword {
-  color: #d2a8ff
-}
-
-.lb-content pre .token.function,
-.lb-content pre .token.class-name {
-  color: #7ee787
-}
-
-.lb-content pre .token.regex,
-.lb-content pre .token.important,
-.lb-content pre .token.variable {
-  color: #ffa657
+.light-mode .lb-content pre.shiki span[style],
+.lb-sepia .lb-content pre.shiki span[style] {
+  color: var(--shiki-light)
 }
 
 /* â”€â”€ Light Mode additions â”€â”€ */
@@ -3206,59 +3174,6 @@ body:has(.challenge-hud.show) .lb-reading-panel {
 
 .light-mode .lb-code-lang {
   color: #94a3b8
-}
-
-.light-mode .lb-content pre .token.comment,
-.light-mode .lb-content pre .token.prolog,
-.light-mode .lb-content pre .token.doctype,
-.light-mode .lb-content pre .token.cdata {
-  color: #6a737d
-}
-
-.light-mode .lb-content pre .token.punctuation {
-  color: #24292e
-}
-
-.light-mode .lb-content pre .token.property,
-.light-mode .lb-content pre .token.tag,
-.light-mode .lb-content pre .token.boolean,
-.light-mode .lb-content pre .token.number,
-.light-mode .lb-content pre .token.constant,
-.light-mode .lb-content pre .token.symbol,
-.light-mode .lb-content pre .token.deleted {
-  color: #d73a49
-}
-
-.light-mode .lb-content pre .token.selector,
-.light-mode .lb-content pre .token.attr-name,
-.light-mode .lb-content pre .token.string,
-.light-mode .lb-content pre .token.char,
-.light-mode .lb-content pre .token.builtin,
-.light-mode .lb-content pre .token.inserted {
-  color: #032f62
-}
-
-.light-mode .lb-content pre .token.operator,
-.light-mode .lb-content pre .token.entity,
-.light-mode .lb-content pre .token.url {
-  color: #005cc5
-}
-
-.light-mode .lb-content pre .token.atrule,
-.light-mode .lb-content pre .token.attr-value,
-.light-mode .lb-content pre .token.keyword {
-  color: #6f42c1
-}
-
-.light-mode .lb-content pre .token.function,
-.light-mode .lb-content pre .token.class-name {
-  color: #22863a
-}
-
-.light-mode .lb-content pre .token.regex,
-.light-mode .lb-content pre .token.important,
-.light-mode .lb-content pre .token.variable {
-  color: #e36209
 }
 
 /* â”€â”€ Reaction Bar â”€â”€ */
@@ -6145,6 +6060,85 @@ body[data-mood]:not([data-mood="neutral"]) .lb-cover-img {
   border-color: #ea4335;
   color: #ea4335;
   box-shadow: 0 0 12px rgba(234, 67, 53, .2)
+}
+
+.lb-share-icon.hn:hover {
+  border-color: #ff6600;
+  color: #ff6600;
+  box-shadow: 0 0 12px rgba(255, 102, 0, .2)
+}
+
+.lb-share-icon.copied,
+.lb-share-icon.copied:hover {
+  border-color: #22c55e;
+  color: #22c55e;
+  box-shadow: 0 0 12px rgba(34, 197, 94, .2)
+}
+
+/* Feed pagination + archive search (client-appended cards self-reveal —
+   GSAP only wires .lb-reveal at mount, so these use a plain CSS fade). */
+.lb-fadein {
+  animation: lbFadeIn .45s ease both
+}
+
+@keyframes lbFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px)
+  }
+
+  to {
+    opacity: 1;
+    transform: none
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lb-fadein {
+    animation: none
+  }
+}
+
+.lb-load-more-wrap {
+  text-align: center;
+  margin: 28px 0 8px
+}
+
+.lb-load-more {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 26px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--accent);
+  cursor: pointer;
+  transition: border-color .2s, box-shadow .2s, opacity .2s
+}
+
+.lb-load-more:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--glow)
+}
+
+.lb-load-more:disabled {
+  opacity: .5;
+  cursor: default
+}
+
+/* While a search query is active, paging the unfiltered feed makes no sense. */
+#lbGrid.lb-searching .lb-load-more-wrap {
+  display: none
+}
+
+.lb-search-results-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--sub);
+  margin: 30px 0 14px;
+  text-transform: uppercase
 }
 
 .light-mode .lb-share-icon {

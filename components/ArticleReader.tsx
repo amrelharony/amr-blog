@@ -108,6 +108,38 @@ export default function ArticleReader({ slug }: { slug: string }) {
       }
     }
 
+    // ── Code copy buttons ── (.lb-copy-btn is injected server-side by the
+    // shiki pipeline in lib/markdown/highlight.ts; delegate from .lb-content)
+    if (content) {
+      const copyTimers = new Map<HTMLElement, number>();
+      const onCopyClick = (e: Event) => {
+        const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".lb-copy-btn");
+        if (!btn) return;
+        const code = btn.closest("pre")?.querySelector("code")?.textContent ?? "";
+        navigator.clipboard
+          ?.writeText(code)
+          .then(() => {
+            btn.classList.add("copied");
+            btn.textContent = "COPIED";
+            window.clearTimeout(copyTimers.get(btn));
+            copyTimers.set(
+              btn,
+              window.setTimeout(() => {
+                btn.classList.remove("copied");
+                btn.textContent = "COPY";
+                copyTimers.delete(btn);
+              }, 1600),
+            );
+          })
+          .catch(() => {});
+      };
+      content.addEventListener("click", onCopyClick);
+      cleanups.push(() => {
+        content.removeEventListener("click", onCopyClick);
+        copyTimers.forEach((t) => window.clearTimeout(t));
+      });
+    }
+
     // ── Footnote hover tooltips ──
     const fnHandlers: Array<{ el: HTMLElement; enter: () => void; leave: () => void }> = [];
     document.querySelectorAll<HTMLElement>(".lb-fn-ref").forEach((ref) => {

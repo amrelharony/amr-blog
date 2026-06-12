@@ -1,8 +1,11 @@
 import { createPublicClient } from "@/lib/supabase/public";
 import type { Article, ArticleCard } from "@/lib/types";
 
-const CARD_COLUMNS =
+export const CARD_COLUMNS =
   "id,title,slug,excerpt,created_at,tags,views,reactions,cover_image,series_name";
+
+/** Cards per feed page — first page is server-rendered, the rest load in-browser. */
+export const FEED_PAGE_SIZE = 15;
 
 /** Published articles for the feed, newest first. */
 export async function getFeedArticles(limit = 50): Promise<ArticleCard[]> {
@@ -63,6 +66,26 @@ export async function getRelatedArticles(article: {
   const overlap = (a: ArticleCard) => (a.tags || []).filter((t) => tags.includes(t)).length;
   pool.sort((a, b) => overlap(b) - overlap(a) || (b.views || 0) - (a.views || 0));
   return pool.slice(0, 4);
+}
+
+/** Tag → article count across ALL published articles (tags column only). */
+export async function getTagCounts(): Promise<Record<string, number>> {
+  const sb = createPublicClient();
+  const { data, error } = await sb.from("longform_articles").select("tags").eq("published", true);
+  if (error) throw error;
+  const counts: Record<string, number> = {};
+  for (const row of (data ?? []) as { tags: string[] | null }[]) {
+    for (const t of row.tags || []) counts[t] = (counts[t] || 0) + 1;
+  }
+  return counts;
+}
+
+/** Most-used tags across all published articles (not just the current page). */
+export async function getTopTags(n = 10): Promise<string[]> {
+  const counts = await getTagCounts();
+  return Object.keys(counts)
+    .sort((a, b) => counts[b] - counts[a])
+    .slice(0, n);
 }
 
 /** Published articles carrying a given tag, newest first. */

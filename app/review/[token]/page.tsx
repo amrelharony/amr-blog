@@ -15,8 +15,12 @@ type Params = { params: Promise<{ token: string }> };
 
 export default async function ReviewPage({ params }: Params) {
   const { token } = await params;
+  // Review tokens are UUIDs — reject malformed input before it reaches the RPC.
+  const validToken = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token);
   const sb = createPublicClient();
-  const { data } = await sb.rpc("get_review_by_token", { p_token: token });
+  const { data } = validToken
+    ? await sb.rpc("get_review_by_token", { p_token: token })
+    : { data: null };
   const r = Array.isArray(data) && data[0] ? data[0] : null;
 
   if (!r) {
@@ -32,7 +36,7 @@ export default async function ReviewPage({ params }: Params) {
     );
   }
 
-  const html = renderArticleHtml(r.article_content);
+  const html = await renderArticleHtml(r.article_content);
 
   return (
     <div className="lb-wrap">

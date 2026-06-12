@@ -13,6 +13,7 @@ import ArticleAnimations from "@/components/ArticleAnimations";
 import ArticleReader from "@/components/ArticleReader";
 import ArticleEngagement from "@/components/ArticleEngagement";
 import TtsButton from "@/components/TtsButton";
+import ShareBar from "@/components/ShareBar";
 import ArticleToolbar from "@/components/ArticleToolbar";
 import ReadingTracker from "@/components/ReadingTracker";
 import CollectionsManager from "@/components/CollectionsManager";
@@ -62,7 +63,7 @@ export default async function ArticlePage({ params }: Params) {
   const a = await getArticleBySlug(slug);
   if (!a) notFound();
 
-  const html = renderArticleHtml(a.content);
+  const html = await renderArticleHtml(a.content);
   const url = `${siteUrl}/p/${a.slug}`;
   const shareText = a.title + (a.excerpt ? `\n\n${a.excerpt}` : "");
 
@@ -259,6 +260,17 @@ export default async function ArticlePage({ params }: Params) {
               >
                 <i className="fa-solid fa-envelope" aria-hidden="true" />
               </a>
+              <a
+                className="lb-share-icon hn"
+                href={`https://news.ycombinator.com/submitlink?u=${encodeURIComponent(url)}&t=${encodeURIComponent(a.title)}`}
+                target="_blank"
+                rel="noopener"
+                title="Share on Hacker News"
+                aria-label="Share on Hacker News"
+              >
+                <i className="fa-brands fa-hacker-news" aria-hidden="true" />
+              </a>
+              <ShareBar url={url} title={a.title} text={shareText} />
               <TtsButton />
               <CollectionsManager articleId={a.id} slug={a.slug} title={a.title} coverImage={a.cover_image || ""} />
             </div>

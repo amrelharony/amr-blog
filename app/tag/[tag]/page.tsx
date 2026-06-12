@@ -1,27 +1,27 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getArticlesByTag } from "@/lib/queries/articles";
-import { fmtDate } from "@/lib/format";
-import type { ArticleCard } from "@/lib/types";
 import FeedAnimations from "@/components/FeedAnimations";
+import ArticleCardV2 from "@/components/ArticleCardV2";
+import { breadcrumbJsonLd } from "@/lib/seo";
 
 export const revalidate = 300;
 
-type Params = { params: Promise<{ tag: string }> };
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://blog.amrelharony.com";
 
-function rxCount(r: Record<string, number> | null | undefined): number {
-  return Object.values(r || {}).reduce((s, n) => s + (n || 0), 0);
-}
-function isTrending(a: ArticleCard): boolean {
-  return (a.views || 0) >= 50 || rxCount(a.reactions) >= 10;
-}
+type Params = { params: Promise<{ tag: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { tag } = await params;
+  const title = `Tagged: ${tag}`;
+  const description = `Articles tagged "${tag}" by Amr Elharony.`;
+  const canonical = `/tag/${encodeURIComponent(tag)}`;
   return {
-    title: `Tagged: ${tag}`,
-    description: `Articles tagged "${tag}" by Amr Elharony.`,
-    alternates: { canonical: `/tag/${encodeURIComponent(tag)}` },
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: { type: "website", title, description, url: canonical },
+    twitter: { card: "summary", title, description },
   };
 }
 
@@ -29,8 +29,18 @@ export default async function TagPage({ params }: Params) {
   const { tag } = await params;
   const articles = await getArticlesByTag(tag);
 
+  const breadcrumbs = breadcrumbJsonLd([
+    { name: "Articles", url: `${siteUrl}/` },
+    { name: `#${tag}`, url: `${siteUrl}/tag/${encodeURIComponent(tag)}` },
+  ]);
+
   return (
     <div className="lb-wrap" style={{ maxWidth: 900 }}>
+      <script
+        type="application/ld+json"
+        // Escape `<` so a tag containing "</script>" can't break out of the tag.
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbs).replace(/</g, "\\u003c") }}
+      />
       <nav className="lb-nav" role="navigation" aria-label="Blog navigation">
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <Link className="lb-nav-back" href="/" role="link">
@@ -61,54 +71,9 @@ export default async function TagPage({ params }: Params) {
           </div>
         ) : (
           <div className="lb-card-grid">
-            {articles.map((a, idx) => {
-              const rc = rxCount(a.reactions);
-              return (
-                <Link
-                  key={a.id}
-                  className="lb-card-v2 lb-reveal"
-                  style={{ transitionDelay: `${((idx % 2) * 0.07).toFixed(2)}s` }}
-                  href={`/p/${a.slug}`}
-                  aria-label={a.title}
-                >
-                  {a.cover_image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img className="lb-card-v2-img" src={a.cover_image} alt={a.title} loading="lazy" />
-                  ) : (
-                    <div className="lb-card-v2-fallback">
-                      <i className="fa-solid fa-feather-pointed" />
-                    </div>
-                  )}
-                  <div className="lb-card-v2-body">
-                    <div className="lb-card-v2-date">
-                      {fmtDate(a.created_at)}
-                      {isTrending(a) && (
-                        <span className="lb-trending-badge">
-                          {" "}
-                          <i className="fa-solid fa-fire" /> TRENDING
-                        </span>
-                      )}
-                    </div>
-                    <div className="lb-card-v2-title">{a.title}</div>
-                    <div className="lb-card-v2-excerpt">{(a.excerpt || "").slice(0, 120)}</div>
-                    <div className="lb-card-v2-footer">
-                      <div className="lb-card-v2-tags">
-                        {(a.tags || []).slice(0, 2).map((t) => (
-                          <span key={t} className="lb-card-tag">
-                            {t}
-                          </span>
-                        ))}
-                        {a.series_name && <span className="lb-series-badge">{a.series_name}</span>}
-                      </div>
-                      <div className="lb-card-v2-stats lb-social-proof">
-                        <span>👁 {a.views || 0}</span>
-                        {rc > 0 && <span>❤ {rc}</span>}
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
+            {articles.map((a, idx) => (
+              <ArticleCardV2 key={a.id} a={a} delayIndex={idx} />
+            ))}
           </div>
         )}
       </main>
