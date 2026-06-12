@@ -617,6 +617,10 @@ body:has(#blogView.active)::-webkit-scrollbar-thumb:hover {
 
 .lb-cover-img {
   width: 100%;
+  /* Reserve the box before the image loads (CLS) — the mood themes already
+     crop covers to 16/9, so the neutral theme now matches. */
+  aspect-ratio: 16/9;
+  object-fit: cover;
   border-radius: 16px;
   margin-bottom: 40px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, .18);

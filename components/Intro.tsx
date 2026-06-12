@@ -20,6 +20,22 @@ export default function Intro() {
       setGone(true);
       return;
     }
+    // Once per session: skip on repeat views (the pre-paint script in
+    // layout.tsx already hides the overlay via html.intro-seen, so there's no
+    // flash before this runs). ?introhold bypasses the gate for inspection.
+    let hold = false;
+    try {
+      hold = new URLSearchParams(location.search).has("introhold");
+    } catch {}
+    if (!hold) {
+      try {
+        if (sessionStorage.getItem("introSeen")) {
+          setGone(true);
+          return;
+        }
+        sessionStorage.setItem("introSeen", "1");
+      } catch {}
+    }
     const root = rootRef.current;
     const overlay = overlayRef.current;
     if (!root || !overlay) return;
@@ -84,10 +100,6 @@ export default function Intro() {
     }
     cleanupVar = runRes.cleanup;
     // ?introhold freezes the intro (no auto-wipe / skip / safety) for inspection.
-    let hold = false;
-    try {
-      hold = new URLSearchParams(location.search).has("introhold");
-    } catch {}
     if (hold) {
       return () => {
         try {

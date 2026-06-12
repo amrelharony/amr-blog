@@ -3860,29 +3860,46 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
     ensureVisible(9000);
   }
 
-  // Load Three.js + model on all viewports (mobile included, like the main site).
-  // Only reduced-motion falls back to the emoji launcher. GLB is cached immutably (1yr).
+  // Load Three.js + model lazily: the 16 MB GLB starts loading on launcher
+  // hover/click, or on idle only for capable connections (no Save-Data, fast
+  // network, >=4 GB device memory). The emoji launcher shows until then.
+  // Only reduced-motion stays emoji-only. GLB is cached immutably (1yr).
   if (!A.RM) {
-    loadThreeExtensions().then(function() {
-      initScene(floatEl);
-      // Bump ?v= whenever /mascot.glb changes — it's cached immutably for 1 year (see vercel.json)
-      return loadGLB('/mascot.glb', function(pct) {
-        // Loading progress available if needed
+    floatEl.innerHTML = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:48px;opacity:.6;">\ud83e\udd16</div><span class="mascot-float-label">ASK ELHARONYCLAW</span>';
+    var _3dStarted = false;
+    var start3D = function() {
+      if (_3dStarted) return;
+      _3dStarted = true;
+      loadThreeExtensions().then(function() {
+        // Clear the emoji placeholder before the canvas attaches.
+        floatEl.innerHTML = '<span class="mascot-float-label">ASK ELHARONYCLAW</span>';
+        initScene(floatEl);
+        // Bump ?v= whenever /mascot.glb changes — it's cached immutably for 1 year (see vercel.json)
+        return loadGLB('/mascot.glb', function(pct) {
+          // Loading progress available if needed
+        });
+      }).then(function(gltf) {
+        onModelLoaded(gltf);
+        queueReaction('wave');
+        // Initialize advanced systems
+        initEmotionalIntelligence();
+        initAutoBehavior();
+        initDragDrop();
+        initEasterEggs();
+        initAppearance();
+      }).catch(function(err) {
+        console.warn('[Mascot] Load failed:', err);
+        // Fallback: show emoji placeholder
+        floatEl.innerHTML = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:48px;opacity:.6;">\ud83e\udd16</div><span class="mascot-float-label">ASK ELHARONYCLAW</span>';
       });
-    }).then(function(gltf) {
-      onModelLoaded(gltf);
-      queueReaction('wave');
-      // Initialize advanced systems
-      initEmotionalIntelligence();
-      initAutoBehavior();
-      initDragDrop();
-      initEasterEggs();
-      initAppearance();
-    }).catch(function(err) {
-      console.warn('[Mascot] Load failed:', err);
-      // Fallback: show emoji placeholder
-      floatEl.innerHTML = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:48px;opacity:.6;">\ud83e\udd16</div><span class="mascot-float-label">ASK ELHARONYCLAW</span>';
-    });
+    };
+    floatEl.addEventListener('pointerenter', start3D, { once: true });
+    floatEl.addEventListener('click', start3D, { once: true });
+    var _conn = navigator.connection || {};
+    var _capable = !_conn.saveData && (_conn.effectiveType || '4g') === '4g' && (navigator.deviceMemory || 8) >= 4;
+    if (_capable) {
+      (window.requestIdleCallback ? window.requestIdleCallback.bind(window) : function(cb) { setTimeout(cb, 2500); })(start3D, { timeout: 8000 });
+    }
   } else {
     // Reduced motion: emoji-only
     floatEl.innerHTML = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:48px;opacity:.6;">\ud83e\udd16</div><span class="mascot-float-label">ASK ELHARONYCLAW</span>';

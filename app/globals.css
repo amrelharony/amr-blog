@@ -135,6 +135,11 @@ body .mascot-float {
   background: var(--bg);
   clip-path: inset(0 0 0% 0);
 }
+/* Pre-paint gate (set by the layout theme script from sessionStorage): repeat
+   views this session never see the overlay, even before hydration. */
+.intro-seen #blog-intro {
+  display: none !important;
+}
 /* Variation containers: .intro-root fills the overlay + centers in-flow children
    (terminal-boot text, shader/svg wordmark stage); canvases/svg are full-bleed absolute. */
 .intro-root,
