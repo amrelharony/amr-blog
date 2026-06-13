@@ -245,3 +245,49 @@
   max-width: 360px;
   margin: 12vh auto 0;
 }
+
+/* Toasts (lib/toast.ts → AdminToaster) — above the ⌘K palette (9992). */
+.adm-toast-wrap {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9995;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+}
+.adm-toast {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: admToastIn 0.2s ease;
+}
+.adm-toast.ok {
+  border-color: rgba(34, 197, 94, 0.4);
+}
+.adm-toast.err {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+@keyframes admToastIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .adm-toast {
+    animation: none;
+  }
+}
