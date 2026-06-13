@@ -35,6 +35,14 @@ export default function AdminNav() {
         );
       })}
       <span className="adm-nav-spacer" />
+      <button
+        className="adm-nav-link"
+        onClick={() => window.dispatchEvent(new Event("admin:palette"))}
+        title="Command palette (Ctrl K)"
+        aria-label="Open command palette"
+      >
+        ⌘K
+      </button>
       <Link href="/" className="adm-nav-link">
         View site ↗
       </Link>

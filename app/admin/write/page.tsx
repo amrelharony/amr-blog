@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import { slugify, fmtDate } from "@/lib/format";
 import { isSlugTaken } from "@/lib/slug";
@@ -39,8 +40,9 @@ type FormState = typeof EMPTY;
 // Per-article localStorage autosave key (new articles share one "new" slot).
 const draftKey = (id: string) => `_lb_article_draft_${id || "new"}`;
 
-export default function WritePage() {
+function WriteEditor() {
   const sb = getBrowserClient();
+  const searchParams = useSearchParams();
   const [list, setList] = useState<Row[]>([]);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
@@ -98,6 +100,13 @@ export default function WritePage() {
     setEditing(true);
     checkDraft("");
   };
+
+  // Open a fresh editor when navigated with ?new (e.g. from the ⌘K palette);
+  // re-runs on query change so it works even when already on this page.
+  useEffect(() => {
+    if (searchParams.get("new") !== null) startNew();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const startEdit = async (id: string) => {
     const seq = ++editSeq.current;
@@ -482,5 +491,14 @@ export default function WritePage() {
         )}
       </div>
     </div>
+  );
+}
+
+// useSearchParams() requires a Suspense boundary at the page level (Next 16).
+export default function WritePage() {
+  return (
+    <Suspense fallback={null}>
+      <WriteEditor />
+    </Suspense>
   );
 }
