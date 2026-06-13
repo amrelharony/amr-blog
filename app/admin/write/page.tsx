@@ -5,6 +5,9 @@ import { getBrowserClient } from "@/lib/supabase/browser";
 import { slugify, fmtDate } from "@/lib/format";
 import { isSlugTaken } from "@/lib/slug";
 import { relTime } from "@/lib/microblog-format";
+import { filterSort, pubStatus } from "@/lib/admin-filter";
+import { toast } from "@/lib/toast";
+import AdminListToolbar from "@/components/AdminListToolbar";
 
 interface Row {
   id: string;
@@ -14,6 +17,23 @@ interface Row {
   scheduled_at: string | null;
   created_at: string;
 }
+
+const LIST_COMPARATORS: Record<string, (a: Row, b: Row) => number> = {
+  newest: (a, b) => b.created_at.localeCompare(a.created_at),
+  oldest: (a, b) => a.created_at.localeCompare(b.created_at),
+  title: (a, b) => a.title.localeCompare(b.title),
+};
+const STATUS_OPTS = [
+  { value: "all", label: "All" },
+  { value: "live", label: "Live" },
+  { value: "draft", label: "Draft" },
+  { value: "sched", label: "Scheduled" },
+];
+const SORT_OPTS = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "title", label: "Title A–Z" },
+];
 
 const EMPTY = {
   id: "",
@@ -50,6 +70,11 @@ function WriteEditor() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ t: string; ok: boolean } | null>(null);
   const [reviewUrl, setReviewUrl] = useState("");
+  // Article-list view: search/filter/sort + multi-select.
+  const [listQuery, setListQuery] = useState("");
+  const [listStatus, setListStatus] = useState("all");
+  const [listSort, setListSort] = useState("newest");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [dirty, setDirty] = useState(false);
   const [draft, setDraft] = useState<{ form: FormState; at: number } | null>(null);
   // Skip the first autosave write after a load so it can't clobber an existing
@@ -336,18 +361,86 @@ function WriteEditor() {
   };
 
   if (!editing) {
+    const visible = filterSort(list, {
+      query: listQuery,
+      fields: (a) => [a.title, a.slug],
+      status: listStatus,
+      statusOf: pubStatus,
+      sort: listSort,
+      comparators: LIST_COMPARATORS,
+    });
+    const allSelected = visible.length > 0 && visible.every((a) => selected.has(a.id));
+    const toggleAll = () =>
+      setSelected(allSelected ? new Set() : new Set(visible.map((a) => a.id)));
+    const toggleOne = (id: string) =>
+      setSelected((s) => {
+        const n = new Set(s);
+        if (n.has(id)) n.delete(id);
+        else n.add(id);
+        return n;
+      });
+    const bulkDelete = async () => {
+      const targets = visible.filter((a) => selected.has(a.id));
+      if (!targets.length || !confirm(`Delete ${targets.length} article(s)? This cannot be undone.`)) return;
+      const ids = new Set(targets.map((a) => a.id));
+      setList((p) => p.filter((a) => !ids.has(a.id))); // optimistic
+      setSelected(new Set());
+      const failed: Row[] = [];
+      for (const a of targets) {
+        const { error } = await sb.from("longform_articles").delete().eq("id", a.id);
+        if (error) failed.push(a);
+        else revalidate(a.slug);
+      }
+      if (failed.length) {
+        setList((p) =>
+          [...p, ...failed].sort((x, y) => y.created_at.localeCompare(x.created_at)),
+        );
+        toast.err(`${failed.length} couldn't be deleted (not permitted).`);
+      }
+      const ok = targets.length - failed.length;
+      if (ok) toast.ok(`Deleted ${ok} article${ok > 1 ? "s" : ""}.`);
+    };
+
     return (
       <div>
         <div className="adm-h">Articles</div>
-        <div className="adm-sub">{list.length} total — click to edit.</div>
+        <div className="adm-sub">
+          {visible.length} of {list.length} — click to edit.
+        </div>
         <div className="adm-actions" style={{ marginBottom: 16 }}>
           <button className="adm-btn primary" onClick={startNew}>
             + New article
           </button>
         </div>
+        <AdminListToolbar
+          query={listQuery}
+          onQuery={setListQuery}
+          placeholder="Search title or slug…"
+          status={listStatus}
+          onStatus={setListStatus}
+          statusOptions={STATUS_OPTS}
+          sort={listSort}
+          onSort={setListSort}
+          sortOptions={SORT_OPTS}
+          selectable
+          allSelected={allSelected}
+          onToggleAll={toggleAll}
+          selectedCount={selected.size}
+          onBulkDelete={bulkDelete}
+          bulkDeleteLabel="Delete selected"
+          onClearSelection={() => setSelected(new Set())}
+        />
         <div className="adm-list">
-          {list.map((a) => (
+          {visible.map((a) => (
             <div key={a.id} className="adm-list-item" onClick={() => startEdit(a.id)}>
+              <input
+                type="checkbox"
+                className="adm-rowcheck"
+                checked={selected.has(a.id)}
+                onClick={(e) => e.stopPropagation()}
+                onChange={() => toggleOne(a.id)}
+                aria-label={`Select ${a.title}`}
+              />
               <span className="adm-list-title">{a.title}</span>
               <span className="adm-pill">{fmtDate(a.created_at)}</span>
               {a.published ? (

@@ -246,6 +246,51 @@
   margin: 12vh auto 0;
 }
 
+/* List toolbar + bulk actions (AdminListToolbar) */
+.adm-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.adm-toolbar .adm-input,
+.adm-toolbar .adm-select {
+  width: auto;
+}
+.adm-toolbar-search {
+  flex: 2 1 200px;
+  min-width: 0;
+}
+.adm-toolbar-select {
+  flex: 1 1 130px;
+  max-width: 220px;
+}
+.adm-bulkbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(0, 225, 255, 0.25);
+  background: rgba(0, 225, 255, 0.06);
+  border-radius: 10px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+}
+.adm-bulkbar > span {
+  color: var(--accent);
+  margin-right: auto;
+}
+.adm-rowcheck {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
 /* Toasts (lib/toast.ts → AdminToaster) — above the ⌘K palette (9992). */
 .adm-toast-wrap {
   position: fixed;

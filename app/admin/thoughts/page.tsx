@@ -2,9 +2,29 @@
 import { useCallback, useEffect, useState } from "react";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import { relTime } from "@/lib/microblog-format";
+import { filterSort, pubStatus } from "@/lib/admin-filter";
+import { toast } from "@/lib/toast";
+import AdminListToolbar from "@/components/AdminListToolbar";
 import type { Thought } from "@/lib/types";
 
 const MAX = 500;
+
+const T_COMPARATORS: Record<string, (a: Thought, b: Thought) => number> = {
+  pinned: (a, b) => (a.pinned === b.pinned ? 0 : a.pinned ? -1 : 1) || b.created_at.localeCompare(a.created_at),
+  newest: (a, b) => b.created_at.localeCompare(a.created_at),
+  oldest: (a, b) => a.created_at.localeCompare(b.created_at),
+};
+const T_STATUS = [
+  { value: "all", label: "All" },
+  { value: "live", label: "Live" },
+  { value: "draft", label: "Draft" },
+  { value: "sched", label: "Scheduled" },
+];
+const T_SORT = [
+  { value: "pinned", label: "Pinned first" },
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+];
 
 export default function AdminThoughts() {
   const sb = getBrowserClient();
@@ -14,6 +34,10 @@ export default function AdminThoughts() {
   const [scheduled, setScheduled] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ t: string; ok: boolean } | null>(null);
+  const [query, setQuery] = useState("");
+  const [statusF, setStatusF] = useState("all");
+  const [sortF, setSortF] = useState("pinned");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     const { data } = await sb
@@ -102,6 +126,45 @@ export default function AdminThoughts() {
     load();
   };
 
+  const visible = filterSort(list, {
+    query,
+    fields: (t) => [t.content],
+    status: statusF,
+    statusOf: pubStatus,
+    sort: sortF,
+    comparators: T_COMPARATORS,
+  });
+  const allSelected = visible.length > 0 && visible.every((t) => selected.has(t.id));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(visible.map((t) => t.id)));
+  const toggleOne = (id: string) =>
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const bulkDelete = async () => {
+    const targets = visible.filter((t) => selected.has(t.id));
+    if (!targets.length || !confirm(`Delete ${targets.length} thought(s)?`)) return;
+    const ids = new Set(targets.map((t) => t.id));
+    setList((p) => p.filter((t) => !ids.has(t.id))); // optimistic
+    setSelected(new Set());
+    const failed: Thought[] = [];
+    for (const t of targets) {
+      const { error } = await sb.from("microblog").delete().eq("id", t.id);
+      if (error) failed.push(t);
+    }
+    if (failed.length) {
+      setList((p) => [...p, ...failed]);
+      toast.err(`${failed.length} couldn't be deleted.`);
+    }
+    const ok = targets.length - failed.length;
+    if (ok) {
+      toast.ok(`Deleted ${ok} thought${ok > 1 ? "s" : ""}.`);
+      revalidate();
+    }
+  };
+
   return (
     <div>
       <div className="adm-h">Thoughts</div>
@@ -147,10 +210,37 @@ export default function AdminThoughts() {
         {msg && <div className={"adm-msg " + (msg.ok ? "ok" : "err")}>{msg.t}</div>}
       </div>
 
-      <div className="adm-sub">{list.length} thoughts</div>
+      <div className="adm-sub">
+        {visible.length} of {list.length} thoughts
+      </div>
+      <AdminListToolbar
+        query={query}
+        onQuery={setQuery}
+        placeholder="Search content…"
+        status={statusF}
+        onStatus={setStatusF}
+        statusOptions={T_STATUS}
+        sort={sortF}
+        onSort={setSortF}
+        sortOptions={T_SORT}
+        selectable
+        allSelected={allSelected}
+        onToggleAll={toggleAll}
+        selectedCount={selected.size}
+        onBulkDelete={bulkDelete}
+        bulkDeleteLabel="Delete selected"
+        onClearSelection={() => setSelected(new Set())}
+      />
       <div className="adm-list">
-        {list.map((t) => (
+        {visible.map((t) => (
           <div key={t.id} className="adm-list-item">
+            <input
+              type="checkbox"
+              className="adm-rowcheck"
+              checked={selected.has(t.id)}
+              onChange={() => toggleOne(t.id)}
+              aria-label="Select thought"
+            />
             <span className="adm-list-title" style={{ fontWeight: 400, fontSize: 13 }}>
               {(t.content || "(image only)").slice(0, 90)}
             </span>
