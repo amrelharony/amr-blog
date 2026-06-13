@@ -351,7 +351,7 @@ export default async function ArticlePage({ params }: Params) {
       <ArticleAnimations slug={a.slug} />
       <ArticleReader slug={a.slug} />
       <ArticleToolbar minutes={Math.max(1, Math.ceil(words / 200))} />
-      <ReadingTracker articleId={a.id} slug={a.slug} title={a.title} coverImage={a.cover_image || ""} />
+      <ReadingTracker articleId={a.id} slug={a.slug} title={a.title} coverImage={a.cover_image || ""} tags={a.tags || []} />
       <Annotations articleId={a.id} />
     </div>
   );

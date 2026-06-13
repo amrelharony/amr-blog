@@ -11,6 +11,7 @@ import FeedTitle from "@/components/FeedTitle";
 import FeedSearch from "@/components/FeedSearch";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import ContinueReading from "@/components/ContinueReading";
+import ForYou from "@/components/ForYou";
 import CollectionsStrip from "@/components/CollectionsStrip";
 import ReaderStats from "@/components/ReaderStats";
 
@@ -78,6 +79,7 @@ export default async function FeedPage() {
 
       <ReaderStats />
       <ContinueReading />
+      <ForYou />
       <CollectionsStrip />
 
       <main id="lbGrid" role="feed" aria-label="Article list">

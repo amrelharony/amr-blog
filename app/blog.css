@@ -7466,7 +7466,8 @@ body[data-mood]:not([data-mood="neutral"]) .lb-cover-img {
   margin-bottom: 32px
 }
 
-.lb-continue-title {
+.lb-continue-title,
+.lb-foryou-title {
   font-family: 'JetBrains Mono', monospace;
   font-size: 10px;
   font-weight: 700;
@@ -7477,6 +7478,15 @@ body[data-mood]:not([data-mood="neutral"]) .lb-cover-img {
   display: flex;
   align-items: center;
   gap: 8px
+}
+
+/* "For You" recommendations strip — reuses the feed card grid below the label. */
+.lb-foryou {
+  margin-bottom: 32px
+}
+
+.lb-foryou-title i {
+  color: var(--accent)
 }
 
 .lb-continue-scroll {
@@ -9758,6 +9768,7 @@ body[data-mood]:not([data-mood="neutral"]) .lb-cover-img {
   .lb-hl-toolbar,
   .lb-note-popover,
   .lb-continue,
+  .lb-foryou,
   .lb-coll-fab,
   .lb-coll-panel,
   .lb-coll-popover,
