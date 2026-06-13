@@ -3,11 +3,10 @@
 // `tldr` column — so it's generated at write time, never per request. Auth
 // mirrors /api/revalidate: a valid admin session (auth.uid() === ADMIN_UUID).
 //
-// Provider defaults to Z.ai GLM (OpenAI-compatible). Configure via env:
-//   SUMMARY_API_KEY  (required — the Z.ai/GLM key; NEVER commit it)
-//   SUMMARY_MODEL    (default "glm-5.1")
-//   SUMMARY_API_URL  (default Z.ai chat-completions endpoint)
-// The chat route keeps its own OPENCLAW_* config — only TL;DR uses GLM.
+// Provider defaults to the OpenClaw endpoint (chat.amrelharony.com), reusing the
+// chat route's OPENCLAW_* config so TL;DR works with no extra env. Override with
+// SUMMARY_API_URL / SUMMARY_API_KEY / SUMMARY_MODEL to point at a different
+// OpenAI-compatible provider (e.g. Z.ai GLM).
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ADMIN_UUID } from "@/lib/constants";
@@ -16,9 +15,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const SUMMARY_API_URL =
-  process.env.SUMMARY_API_URL || "https://api.z.ai/api/paas/v4/chat/completions";
-const SUMMARY_API_KEY = process.env.SUMMARY_API_KEY || "";
-const SUMMARY_MODEL = process.env.SUMMARY_MODEL || "glm-5.1";
+  process.env.SUMMARY_API_URL ||
+  process.env.OPENCLAW_URL ||
+  "https://chat.amrelharony.com/v1/chat/completions";
+const SUMMARY_API_KEY = process.env.SUMMARY_API_KEY || process.env.OPENCLAW_API_KEY || "";
+const SUMMARY_MODEL = process.env.SUMMARY_MODEL || process.env.OPENCLAW_MODEL || "openclaw";
 
 const MAX_CONTENT = 6000; // chars of article body sent upstream (keeps input in budget)
 const REQUEST_TIMEOUT = 30000;
@@ -47,7 +48,7 @@ async function isAdmin(): Promise<boolean> {
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return json({ error: "Unauthorized" }, 401);
-  if (!SUMMARY_API_KEY) return json({ error: "Summary service not configured (set SUMMARY_API_KEY)" }, 503);
+  if (!SUMMARY_API_KEY) return json({ error: "Summary service not configured" }, 503);
 
   let body: { title?: string; content?: string };
   try {
