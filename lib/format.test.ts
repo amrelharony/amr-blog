@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { esc, readingTime, fmtDate, slugify } from "@/lib/format";
+import { esc, readingTime, fmtDate, slugify, toLocalInput } from "@/lib/format";
 
 describe("esc", () => {
   it("escapes the four HTML-sensitive characters", () => {
@@ -69,5 +69,17 @@ describe("slugify", () => {
   it("returns empty string for null and undefined", () => {
     expect(slugify(null)).toBe("");
     expect(slugify(undefined)).toBe("");
+  });
+});
+
+describe("toLocalInput", () => {
+  it("returns empty for null/undefined/invalid", () => {
+    expect(toLocalInput(null)).toBe("");
+    expect(toLocalInput(undefined)).toBe("");
+    expect(toLocalInput("not-a-date")).toBe("");
+  });
+
+  it("produces a datetime-local string (YYYY-MM-DDTHH:mm)", () => {
+    expect(toLocalInput("2026-06-13T09:30:00Z")).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
   });
 });

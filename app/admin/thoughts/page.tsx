@@ -2,10 +2,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import { relTime } from "@/lib/microblog-format";
+import { toLocalInput } from "@/lib/format";
 import { filterSort, pubStatus } from "@/lib/admin-filter";
 import { toast } from "@/lib/toast";
 import AdminListToolbar from "@/components/AdminListToolbar";
-import type { Thought } from "@/lib/types";
+import type { Thought, Poll } from "@/lib/types";
 
 const MAX = 500;
 
@@ -38,6 +39,10 @@ export default function AdminThoughts() {
   const [statusF, setStatusF] = useState("all");
   const [sortF, setSortF] = useState("pinned");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Edit mode: when set, the form updates an existing thought instead of inserting.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editPoll, setEditPoll] = useState<Poll | null>(null);
+  const [editImage, setEditImage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const { data } = await sb
@@ -81,6 +86,7 @@ export default function AdminThoughts() {
       }
       const row: Record<string, unknown> = { content: content.trim(), published: mode === "publish", linkedin_posted: true };
       if (image_url) row.image_url = image_url;
+      else if (editingId && editImage) row.image_url = editImage; // preserve existing image
       // [poll:Question?|Option 1|Option 2]
       const pollMatch = content.match(/\[poll:(.+?)\|(.+?)\]/);
       if (pollMatch) {
@@ -89,6 +95,8 @@ export default function AdminThoughts() {
           options: pollMatch[2].split("|").map((o) => ({ text: o.trim(), votes: 0 })),
         };
         row.content = content.replace(/\[poll:.+?\]/, "").trim() || pollMatch[1].trim();
+      } else if (editingId && editPoll) {
+        row.poll = editPoll; // preserve the existing poll + its votes when editing
       }
       if (mode === "schedule") {
         if (!scheduled) {
@@ -98,13 +106,22 @@ export default function AdminThoughts() {
         }
         row.published = false;
         row.scheduled_at = new Date(scheduled).toISOString();
+      } else if (editingId) {
+        row.scheduled_at = null; // editing back to draft/publish clears any prior schedule
       }
-      const { error } = await sb.from("microblog").insert(row);
+      const { error } = editingId
+        ? await sb.from("microblog").update(row).eq("id", editingId)
+        : await sb.from("microblog").insert(row);
       if (error) throw error;
+      const wasEditing = !!editingId;
       setContent("");
       setFile(null);
       setScheduled("");
-      setMsg({ t: "Posted.", ok: true });
+      setEditingId(null);
+      setEditPoll(null);
+      setEditImage(null);
+      setMsg({ t: wasEditing ? "Updated." : "Posted.", ok: true });
+      toast.ok(wasEditing ? "Thought updated." : "Thought posted.");
       await revalidate();
       load();
     } catch (e) {
@@ -112,6 +129,26 @@ export default function AdminThoughts() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const startEditThought = (t: Thought) => {
+    setEditingId(t.id);
+    setContent(t.content || "");
+    setEditPoll(t.poll || null);
+    setEditImage(t.image_url || null);
+    setFile(null);
+    setScheduled(toLocalInput(t.scheduled_at));
+    setMsg({ t: "Editing — Post/Save/Schedule will update this thought.", ok: true });
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditPoll(null);
+    setEditImage(null);
+    setContent("");
+    setFile(null);
+    setScheduled("");
+    setMsg(null);
   };
 
   const togglePin = async (t: Thought) => {
@@ -191,10 +228,10 @@ export default function AdminThoughts() {
         </div>
         <div className="adm-actions">
           <button className="adm-btn primary" disabled={busy} onClick={() => post("publish")}>
-            Post
+            {editingId ? "Update" : "Post"}
           </button>
           <button className="adm-btn" disabled={busy} onClick={() => post("draft")}>
-            Save draft
+            {editingId ? "Update as draft" : "Save draft"}
           </button>
           <input
             className="adm-input"
@@ -206,6 +243,11 @@ export default function AdminThoughts() {
           <button className="adm-btn" disabled={busy} onClick={() => post("schedule")}>
             Schedule
           </button>
+          {editingId && (
+            <button className="adm-btn" disabled={busy} onClick={cancelEdit}>
+              Cancel edit
+            </button>
+          )}
         </div>
         {msg && <div className={"adm-msg " + (msg.ok ? "ok" : "err")}>{msg.t}</div>}
       </div>
@@ -253,6 +295,9 @@ export default function AdminThoughts() {
             ) : (
               <span className="adm-pill draft">Draft</span>
             )}
+            <button className="adm-btn" onClick={() => startEditThought(t)}>
+              Edit
+            </button>
             <button className="adm-btn" onClick={() => togglePin(t)}>
               {t.pinned ? "Unpin" : "Pin"}
             </button>

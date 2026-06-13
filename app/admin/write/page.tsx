@@ -2,7 +2,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getBrowserClient } from "@/lib/supabase/browser";
-import { slugify, fmtDate } from "@/lib/format";
+import { slugify, fmtDate, toLocalInput } from "@/lib/format";
 import { isSlugTaken } from "@/lib/slug";
 import { relTime } from "@/lib/microblog-format";
 import { filterSort, pubStatus } from "@/lib/admin-filter";
@@ -35,6 +35,14 @@ const SORT_OPTS = [
   { value: "title", label: "Title A–Z" },
 ];
 
+// Snapshots written by the save_article_version RPC before each update.
+interface ArticleVersion {
+  id: string;
+  version_number: number;
+  title: string;
+  created_at: string;
+}
+
 const EMPTY = {
   id: "",
   title: "",
@@ -48,13 +56,6 @@ const EMPTY = {
   scheduled: "",
   tldr: "",
 };
-
-function toLocalInput(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const off = d.getTimezoneOffset();
-  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16);
-}
 
 type FormState = typeof EMPTY;
 // Per-article localStorage autosave key (new articles share one "new" slot).
@@ -75,6 +76,8 @@ function WriteEditor() {
   const [listStatus, setListStatus] = useState("all");
   const [listSort, setListSort] = useState("newest");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showHistory, setShowHistory] = useState(false);
+  const [versions, setVersions] = useState<ArticleVersion[]>([]);
   const [dirty, setDirty] = useState(false);
   const [draft, setDraft] = useState<{ form: FormState; at: number } | null>(null);
   // Skip the first autosave write after a load so it can't clobber an existing
@@ -346,6 +349,42 @@ function WriteEditor() {
     }
   };
 
+  const openHistory = async () => {
+    if (!form.id) return;
+    setShowHistory(true);
+    const { data } = await sb
+      .from("article_versions")
+      .select("id,version_number,title,created_at")
+      .eq("article_id", form.id)
+      .order("version_number", { ascending: false });
+    setVersions((data || []) as ArticleVersion[]);
+  };
+
+  const restoreVersion = async (v: ArticleVersion) => {
+    if (!confirm(`Load v${v.version_number} into the editor? Unsaved changes will be replaced (saving snapshots the current version first).`))
+      return;
+    const { data, error } = await sb
+      .from("article_versions")
+      .select("title,content,excerpt,tags")
+      .eq("id", v.id)
+      .single();
+    if (error || !data) {
+      toast.err("Couldn't load that version.");
+      return;
+    }
+    skipPersist.current = true; // don't clobber the localStorage draft on this programmatic load
+    setForm((f) => ({
+      ...f,
+      title: data.title || "",
+      content: data.content || "",
+      excerpt: data.excerpt || "",
+      tags: (data.tags || []).join(", "),
+    }));
+    setDirty(true);
+    setShowHistory(false);
+    toast.ok(`Loaded v${v.version_number} — review, then save.`);
+  };
+
   const makeReviewLink = async () => {
     if (!form.id) {
       setMsg({ t: "Save the article first.", ok: false });
@@ -567,6 +606,9 @@ function WriteEditor() {
           </button>
           {form.id && (
             <>
+              <button className="adm-btn" disabled={busy} onClick={openHistory}>
+                History
+              </button>
               <button className="adm-btn" disabled={busy} onClick={makeReviewLink}>
                 Review link
               </button>
@@ -576,6 +618,38 @@ function WriteEditor() {
             </>
           )}
         </div>
+        {showHistory && (
+          <div className="adm-card" style={{ marginTop: 12 }}>
+            <div className="adm-actions" style={{ marginTop: 0, justifyContent: "space-between" }}>
+              <span className="adm-label" style={{ margin: 0 }}>
+                Version history ({versions.length})
+              </span>
+              <button className="adm-btn" onClick={() => setShowHistory(false)}>
+                Close
+              </button>
+            </div>
+            {versions.length === 0 ? (
+              <div className="adm-sub" style={{ marginTop: 10 }}>
+                No snapshots yet — they&apos;re recorded each time you save.
+              </div>
+            ) : (
+              <div className="adm-list" style={{ marginTop: 10 }}>
+                {versions.map((v) => (
+                  <div key={v.id} className="adm-list-item" style={{ cursor: "default" }}>
+                    <span className="adm-pill">v{v.version_number}</span>
+                    <span className="adm-list-title" style={{ fontWeight: 400, fontSize: 13 }}>
+                      {v.title || "(untitled)"}
+                    </span>
+                    <span className="adm-pill">{fmtDate(v.created_at)}</span>
+                    <button className="adm-btn" onClick={() => restoreVersion(v)}>
+                      Restore
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {msg && <div className={"adm-msg " + (msg.ok ? "ok" : "err")}>{msg.t}</div>}
         {reviewUrl && (
           <div className="adm-msg ok">

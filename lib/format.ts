@@ -40,3 +40,12 @@ export function slugify(str: string | null | undefined): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
 }
+
+/** ISO timestamp → value for an <input type="datetime-local"> (local time). */
+export function toLocalInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16);
+}
