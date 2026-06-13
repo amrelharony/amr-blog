@@ -1,6 +1,7 @@
 "use client";
 import { useEffect } from "react";
-import { esc, slugify } from "@/lib/format";
+import { esc } from "@/lib/format";
+import { assignHeadingIds } from "@/lib/toc";
 
 // Reading-experience layer ported from Js/blog-article.js:
 // reading progress bar, table of contents (+ scrollspy), footnote hover tooltips,
@@ -20,7 +21,11 @@ export default function ArticleReader({ slug }: { slug: string }) {
     fill.className = "lb-progress-fill";
     bar.appendChild(fill);
     document.body.appendChild(bar);
-    const onScroll = () => {
+    // rAF-throttled so the per-scroll layout read (scrollHeight/clientHeight)
+    // doesn't thrash on every scroll event (matches ArticleToolbar's pattern).
+    let rafPending = false;
+    const paint = () => {
+      rafPending = false;
       const h = document.documentElement;
       const max = h.scrollHeight - h.clientHeight;
       fill.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + "%";
@@ -28,8 +33,13 @@ export default function ArticleReader({ slug }: { slug: string }) {
       // the page is actually scrollable.
       bar.classList.toggle("visible", max > 40);
     };
+    const onScroll = () => {
+      if (rafPending) return;
+      rafPending = true;
+      requestAnimationFrame(paint);
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
+    paint();
     cleanups.push(() => {
       window.removeEventListener("scroll", onScroll);
       bar.remove();
@@ -39,20 +49,16 @@ export default function ArticleReader({ slug }: { slug: string }) {
     const content = document.querySelector(".lb-content") as HTMLElement | null;
 
     // ── Table of contents + scrollspy ──
+    // Note: GSAP (articleScrollReveals) only animates heading opacity/transform,
+    // never their text, so reading textContent here is order-independent.
     if (article && content) {
       const headings = Array.from(content.querySelectorAll("h2, h3")) as HTMLElement[];
       if (headings.length >= 2) {
-        const used: Record<string, number> = {};
-        const items = headings.map((h) => {
-          const text = (h.textContent || "").trim();
-          const base = h.id || slugify(text) || "section";
-          let id = base;
-          if (used[id]) {
-            used[id]++;
-            id = base + "-" + used[id];
-          } else used[id] = 1;
-          h.id = id;
-          return { id, text, depth: h.tagName === "H3" ? 3 : 2 };
+        const items = assignHeadingIds(
+          headings.map((h) => ({ tag: h.tagName, text: h.textContent || "", existingId: h.id })),
+        );
+        items.forEach((it, i) => {
+          headings[i].id = it.id;
         });
 
         const nav = document.createElement("nav");
@@ -93,8 +99,15 @@ export default function ArticleReader({ slug }: { slug: string }) {
           (entries) => {
             entries.forEach((entry) => {
               if (entry.isIntersecting) {
-                tocLinks.forEach((l) => l.classList.remove("active"));
-                nav.querySelector(`[data-toc-id="${entry.target.id}"]`)?.classList.add("active");
+                tocLinks.forEach((l) => {
+                  l.classList.remove("active");
+                  l.removeAttribute("aria-current");
+                });
+                const link = nav.querySelector(`[data-toc-id="${entry.target.id}"]`);
+                if (link) {
+                  link.classList.add("active");
+                  link.setAttribute("aria-current", "location");
+                }
               }
             });
           },
