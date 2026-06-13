@@ -23,6 +23,7 @@ const EMPTY = {
   series_name: "",
   series_order: "0",
   scheduled: "",
+  tldr: "",
 };
 
 function toLocalInput(iso: string | null): string {
@@ -77,6 +78,7 @@ export default function WritePage() {
       series_name: data.series_name || "",
       series_order: String(data.series_order ?? 0),
       scheduled: toLocalInput(data.scheduled_at),
+      tldr: data.tldr || "",
     });
     setSlugLocked(true);
     setReviewUrl("");
@@ -129,6 +131,7 @@ export default function WritePage() {
       tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
       series_name: form.series_name.trim() || null,
       series_order: Number(form.series_order) || 0,
+      tldr: form.tldr.trim() || null,
     };
     if (mode === "publish") {
       row.published = true;
@@ -176,6 +179,30 @@ export default function WritePage() {
       await revalidate(slug);
       if (form.id === id) setEditing(false);
       loadList();
+    }
+  };
+
+  const generateTldr = async () => {
+    if (!form.content.trim()) {
+      setMsg({ t: "Write the article content first.", ok: false });
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await fetch("/api/admin/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: form.title, content: form.content }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+      set("tldr", data.tldr);
+      setMsg({ t: "TL;DR generated — review and edit before saving.", ok: true });
+    } catch (e) {
+      setMsg({ t: "TL;DR failed: " + (e as Error).message, ok: false });
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -260,6 +287,23 @@ export default function WritePage() {
         <div className="adm-field">
           <label className="adm-label">Excerpt</label>
           <input className="adm-input" value={form.excerpt} onChange={(e) => set("excerpt", e.target.value)} />
+        </div>
+        <div className="adm-field">
+          <label className="adm-label">
+            TL;DR (AI summary — shown atop the article)
+          </label>
+          <textarea
+            className="adm-textarea"
+            style={{ minHeight: 70 }}
+            value={form.tldr}
+            onChange={(e) => set("tldr", e.target.value)}
+            placeholder="Generate from the content below, then edit. Leave blank to hide."
+          />
+          <div style={{ marginTop: 6 }}>
+            <button className="adm-btn" type="button" disabled={busy} onClick={generateTldr}>
+              ✨ Generate TL;DR
+            </button>
+          </div>
         </div>
         <div className="adm-row">
           <div className="adm-field">

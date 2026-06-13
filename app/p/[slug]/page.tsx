@@ -88,6 +88,7 @@ export default async function ArticlePage({ params }: Params) {
     dateModified: a.updated_at,
     inLanguage: "en",
     wordCount: words,
+    ...(a.tldr ? { abstract: a.tldr } : {}),
     ...(a.cover_image ? { image: a.cover_image } : {}),
     author: {
       "@type": "Person",
@@ -181,6 +182,15 @@ export default async function ArticlePage({ params }: Params) {
               <span aria-label={`${a.views || 0} views`}>👁 {a.views || 0} views</span>
             </div>
           </header>
+
+          {a.tldr && (
+            <aside className="lb-tldr lb-reveal" aria-label="TL;DR summary">
+              <div className="lb-tldr-label">
+                <i className="fa-solid fa-bolt" aria-hidden="true" /> TL;DR
+              </div>
+              <p className="lb-tldr-body">{a.tldr}</p>
+            </aside>
+          )}
 
           {a.cover_image && (
             // eslint-disable-next-line @next/next/no-img-element

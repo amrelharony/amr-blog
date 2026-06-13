@@ -17,6 +17,8 @@ export interface Article {
   linkedin_posted: boolean;
   series_name: string | null;
   series_order: number;
+  /** AI-generated TL;DR, authored/reviewed in the admin editor (column `tldr`). */
+  tldr: string | null;
 }
 
 /** Columns used by the feed/cards (no heavy `content`). */

@@ -629,6 +629,44 @@ body:has(#blogView.active)::-webkit-scrollbar-thumb:hover {
   box-shadow: 0 4px 20px rgba(0, 0, 0, .08)
 }
 
+/* TL;DR summary — sits between the article header and the cover image. */
+.lb-tldr {
+  margin: 0 0 32px;
+  padding: 16px 20px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 10px 10px 0;
+  background: rgba(0, 225, 255, .04);
+}
+
+.lb-tldr-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lb-tldr-body {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.light-mode .lb-tldr {
+  background: rgba(0, 102, 255, .04);
+  border-left-color: #0066ff;
+}
+
+.light-mode .lb-tldr-label {
+  color: #0066ff;
+}
+
 .lb-article-excerpt {
   font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
   font-size: 18px;
