@@ -37,6 +37,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   return {
     title: a.title,
     description,
+    authors: [{ name: "Amr Elharony", url: "https://amrelharony.com" }],
+    ...(a.tags?.length ? { keywords: a.tags } : {}),
     alternates: { canonical: `/p/${a.slug}` },
     openGraph: {
       type: "article",
@@ -65,6 +67,7 @@ export default async function ArticlePage({ params }: Params) {
   const html = renderArticleHtml(a.content);
   const url = `${siteUrl}/p/${a.slug}`;
   const shareText = a.title + (a.excerpt ? `\n\n${a.excerpt}` : "");
+  const words = (a.content || "").split(/\s+/).filter(Boolean).length;
 
   const [related, siblings] = await Promise.all([
     getRelatedArticles({ id: a.id, tags: a.tags || [] }),
@@ -83,10 +86,47 @@ export default async function ArticlePage({ params }: Params) {
     description: a.excerpt || a.title,
     datePublished: a.created_at,
     dateModified: a.updated_at,
+    inLanguage: "en",
+    wordCount: words,
     ...(a.cover_image ? { image: a.cover_image } : {}),
-    author: { "@type": "Person", name: "Amr Elharony", url: "https://amrelharony.com" },
+    author: {
+      "@type": "Person",
+      name: "Amr Elharony",
+      url: "https://amrelharony.com",
+      sameAs: [
+        "https://www.linkedin.com/in/amrmelharony",
+        "https://t.me/Amrmelharony",
+        "https://adplist.org/mentors/amr-elharony",
+      ],
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "Amr Elharony",
+      logo: { "@type": "ImageObject", url: `${siteUrl}/profile.jpg` },
+    },
     mainEntityOfPage: url,
     ...(a.tags?.length ? { keywords: a.tags.join(", ") } : {}),
+  };
+
+  // Breadcrumb trail: Home → [first tag] → article. The feed is the home page,
+  // and /tag/[tag] routes exist, so a tag level avoids a duplicate-URL "Home → Home".
+  const firstTag = a.tags?.[0];
+  const crumbs = [
+    { name: "Home", item: siteUrl },
+    ...(firstTag
+      ? [{ name: firstTag, item: `${siteUrl}/tag/${encodeURIComponent(firstTag)}` }]
+      : []),
+    { name: a.title, item: url },
+  ];
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: crumbs.map((c, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: c.name,
+      item: c.item,
+    })),
   };
 
   return (
@@ -95,6 +135,10 @@ export default async function ArticlePage({ params }: Params) {
         type="application/ld+json"
         // Escape `<` so a title/excerpt containing "</script>" can't break out of the tag.
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd).replace(/</g, "\\u003c") }}
       />
       <nav className="lb-nav" role="navigation" aria-label="Article navigation">
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -306,7 +350,7 @@ export default async function ArticlePage({ params }: Params) {
       </div>
       <ArticleAnimations slug={a.slug} />
       <ArticleReader slug={a.slug} />
-      <ArticleToolbar minutes={Math.max(1, Math.ceil((a.content || "").split(/\s+/).filter(Boolean).length / 200))} />
+      <ArticleToolbar minutes={Math.max(1, Math.ceil(words / 200))} />
       <ReadingTracker articleId={a.id} slug={a.slug} title={a.title} coverImage={a.cover_image || ""} />
       <Annotations articleId={a.id} />
     </div>
