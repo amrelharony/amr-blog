@@ -302,7 +302,7 @@ export default function WritePage() {
         body: JSON.stringify({ title: form.title, content: form.content }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+      if (!r.ok) throw new Error((data?.error || `HTTP ${r.status}`) + (data?.detail ? ` — ${data.detail}` : ""));
       set("tldr", data.tldr);
       setMsg({ t: "TL;DR generated — review and edit before saving.", ok: true });
     } catch (e) {
