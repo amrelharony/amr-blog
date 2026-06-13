@@ -40,12 +40,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     authors: [{ name: "Amr Elharony", url: "https://amrelharony.com" }],
     ...(a.tags?.length ? { keywords: a.tags } : {}),
     alternates: { canonical: `/p/${a.slug}` },
+    // og:image / twitter:image come from the generated opengraph-image.tsx /
+    // twitter-image.tsx cards in this segment (branded, title-bearing).
     openGraph: {
       type: "article",
       title: a.title,
       description,
       url: `/p/${a.slug}`,
-      images: a.cover_image ? [{ url: a.cover_image, width: 1200, height: 630 }] : undefined,
       publishedTime: a.created_at,
       modifiedTime: a.updated_at,
       tags: a.tags,
@@ -54,7 +55,6 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       card: "summary_large_image",
       title: a.title,
       description,
-      images: a.cover_image ? [a.cover_image] : undefined,
     },
   };
 }
