@@ -4270,6 +4270,23 @@ body:has(.challenge-hud.show) .lb-reading-panel {
   padding: 4px 10px 8px
 }
 
+/* ── Error / not-found boundary actions ── */
+.lb-empty-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 18px
+}
+
+.lb-error-digest {
+  margin-top: 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--sub);
+  opacity: .7
+}
+
 /* ── Feed load-more (echoes .blog-load-more in thoughts.css) ── */
 .lb-load-more {
   display: block;
