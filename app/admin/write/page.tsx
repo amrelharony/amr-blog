@@ -240,21 +240,29 @@ export default function WritePage() {
     }
 
     try {
+      let savedId = form.id;
       if (form.id) {
         await sb.rpc("save_article_version", { p_article_id: form.id }); // snapshot before overwrite
         const { error } = await sb.from("longform_articles").update(row).eq("id", form.id);
         if (error) throw error;
       } else {
-        const { error } = await sb.from("longform_articles").insert(row);
+        // Capture the new id so a second save updates (not re-inserts) and so
+        // autosave moves off the shared "new" draft slot onto this article.
+        const { data: inserted, error } = await sb
+          .from("longform_articles")
+          .insert(row)
+          .select("id")
+          .single();
         if (error) throw error;
+        savedId = inserted?.id || "";
       }
       await revalidate(slug);
-      clearDraft();
+      clearDraft(); // clears the key for the slot we saved under (form.id here)
       setDirty(false);
       setMsg({ t: "Saved.", ok: true });
       setSlugLocked(true);
-      skipPersist.current = true; // don't let the slug update below re-create the draft
-      setForm((f) => ({ ...f, slug }));
+      skipPersist.current = true; // don't let the form update below re-create the draft
+      setForm((f) => ({ ...f, slug, id: savedId }));
       loadList();
     } catch (e) {
       setMsg({ t: "Save failed: " + (e as Error).message, ok: false });
