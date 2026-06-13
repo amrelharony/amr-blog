@@ -1,10 +1,12 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { fmtDate } from "@/lib/format";
 import { highlight } from "@/lib/highlight";
-import { queryTerms, type SearchResponse } from "@/lib/search";
+import { dispatchFeedSearching } from "@/lib/feed-events";
+import { queryTerms } from "@/lib/search";
+import { MIN_SEARCH_QUERY, useSearch } from "@/lib/use-search";
 
 // Wires the homepage search box to the /api/search full-text endpoint. The
 // feed (hero + cards) is static server markup, so — like FeedAnimations /
@@ -12,20 +14,20 @@ import { queryTerms, type SearchResponse } from "@/lib/search";
 // #lbGrid while a server search is active and portals a results panel in
 // after the search bar. If the endpoint is unreachable it degrades to the
 // original in-place DOM filter over the rendered cards.
-const MIN_QUERY = 2;
-const DEBOUNCE_MS = 300;
-
 export default function FeedSearch() {
   const [host, setHost] = useState<HTMLElement | null>(null);
   const [wrap, setWrap] = useState<HTMLElement | null>(null);
   const [q, setQ] = useState("");
-  const [res, setRes] = useState<SearchResponse | null>(null);
-  const [loading, setLoading] = useState(false);
   const [fallback, setFallback] = useState(false);
-  const ctrl = useRef<AbortController | null>(null);
   const composing = useRef(false);
 
-  const active = !fallback && q.trim().length >= MIN_QUERY;
+  const onSearchError = useCallback((e: unknown) => {
+    console.error("[FeedSearch] server search failed, using client filter:", e);
+    setFallback(true);
+  }, []);
+  const { res, loading, abort } = useSearch(q, { enabled: !fallback, onError: onSearchError });
+
+  const active = !fallback && q.trim().length >= MIN_SEARCH_QUERY;
 
   // Attach to the server-rendered input and create the results host node.
   useEffect(() => {
@@ -62,49 +64,14 @@ export default function FeedSearch() {
     input.addEventListener("compositionstart", onCompStart);
     input.addEventListener("compositionend", onCompEnd);
     allChip?.addEventListener("click", onAll);
-    const abort = ctrl;
     return () => {
       input.removeEventListener("input", onInput);
       input.removeEventListener("compositionstart", onCompStart);
       input.removeEventListener("compositionend", onCompEnd);
       allChip?.removeEventListener("click", onAll);
-      abort.current?.abort();
       hostEl.remove();
     };
   }, []);
-
-  // Debounced fetch; rapid clear-then-type is covered by the timeout cleanup
-  // plus aborting the previous in-flight request.
-  useEffect(() => {
-    if (fallback) return;
-    const query = q.trim();
-    if (query.length < MIN_QUERY) {
-      setRes(null);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    const t = setTimeout(async () => {
-      ctrl.current?.abort();
-      const ac = new AbortController();
-      ctrl.current = ac;
-      try {
-        const r = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal: ac.signal });
-        if (!r.ok) throw new Error(`search HTTP ${r.status}`);
-        const data = (await r.json()) as SearchResponse;
-        if (!ac.signal.aborted) {
-          setRes(data);
-          setLoading(false);
-        }
-      } catch (e) {
-        if (ac.signal.aborted) return;
-        console.error("[FeedSearch] server search failed, using client filter:", e);
-        setFallback(true);
-        setLoading(false);
-      }
-    }, DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [q, fallback]);
 
   // Hide the static grid while server results are shown.
   useEffect(() => {
@@ -119,12 +86,10 @@ export default function FeedSearch() {
   // Tell FeedLoadMore a search is underway — in either mode. (In server mode
   // the hidden grid hides the button anyway; in fallback mode the grid stays
   // visible, so the button hides itself on this event.)
-  const querying = q.trim().length >= MIN_QUERY;
+  const querying = q.trim().length >= MIN_SEARCH_QUERY;
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent("feed:searching", { detail: { active: querying } }));
-    return () => {
-      window.dispatchEvent(new CustomEvent("feed:searching", { detail: { active: false } }));
-    };
+    dispatchFeedSearching(querying);
+    return () => dispatchFeedSearching(false);
   }, [querying]);
 
   // Degraded path: the original in-place DOM filter. Items are re-collected
@@ -165,11 +130,11 @@ export default function FeedSearch() {
       input.value = "";
       input.focus();
     }
-    ctrl.current?.abort();
+    abort();
     setQ("");
   };
 
-  const terms = queryTerms(q.trim());
+  const terms = useMemo(() => queryTerms(q.trim()), [q]);
   const noHits =
     res && res.articles.length === 0 && res.thoughts.length === 0 && res.tags.length === 0;
 

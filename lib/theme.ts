@@ -18,6 +18,30 @@ export function setMode(mode: ThemeMode) {
   } catch {}
 }
 
+// Shared UI metadata for mode pickers (ThemeToggle, CommandPalette).
+export const THEME_ICONS: Record<ThemeMode, string> = {
+  auto: "fa-circle-half-stroke",
+  light: "fa-sun",
+  dark: "fa-moon",
+};
+export const THEME_LABELS: Record<ThemeMode, string> = {
+  auto: "Theme: Auto (by time of day)",
+  light: "Theme: Light",
+  dark: "Theme: Dark",
+};
+
+/**
+ * The full mode-change ritual: persist, drop the sepia override, and notify
+ * ThemeManager (which applies the theme + meta theme-color and re-emits
+ * "themechange" for particles/ambient/cursor). Single source of truth for
+ * every mode picker.
+ */
+export function applyMode(mode: ThemeMode) {
+  setMode(mode);
+  document.documentElement.classList.remove("lb-sepia");
+  window.dispatchEvent(new Event("thememodechange"));
+}
+
 // Local time-of-day: light 06:00–17:59, dark otherwise (mirrors Js/site.js).
 export function isLightByTime(d = new Date()): boolean {
   const h = d.getHours();

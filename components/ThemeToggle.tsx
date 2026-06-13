@@ -1,21 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 import { haptic } from "@/lib/haptics";
-import { type ThemeMode, getMode, setMode } from "@/lib/theme";
+import { type ThemeMode, THEME_ICONS, THEME_LABELS, applyMode, getMode } from "@/lib/theme";
 
 // Cycle button: auto → light → dark → auto. "auto" follows time of day (live, via
 // ThemeManager). Stores the mode in localStorage 'theme'; ThemeManager does the applying.
 const NEXT: Record<ThemeMode, ThemeMode> = { auto: "light", light: "dark", dark: "auto" };
-const ICON: Record<ThemeMode, string> = {
-  auto: "fa-circle-half-stroke",
-  light: "fa-sun",
-  dark: "fa-moon",
-};
-const LABEL: Record<ThemeMode, string> = {
-  auto: "Theme: Auto (by time of day)",
-  light: "Theme: Light",
-  dark: "Theme: Dark",
-};
 
 export default function ThemeToggle() {
   const [mode, setModeState] = useState<ThemeMode>("auto");
@@ -27,9 +17,7 @@ export default function ThemeToggle() {
   const cycle = () => {
     const next = NEXT[mode];
     setModeState(next);
-    setMode(next);
-    document.documentElement.classList.remove("lb-sepia");
-    window.dispatchEvent(new Event("thememodechange"));
+    applyMode(next); // shared persist + notify ritual (lib/theme.ts)
     haptic.toggle();
   };
 
@@ -37,10 +25,10 @@ export default function ThemeToggle() {
     <button
       className={"sc-btn" + (mode === "auto" ? " active" : "")}
       onClick={cycle}
-      title={LABEL[mode]}
-      aria-label={LABEL[mode]}
+      title={THEME_LABELS[mode]}
+      aria-label={THEME_LABELS[mode]}
     >
-      <i className={"fa-solid " + ICON[mode]} aria-hidden="true" />
+      <i className={"fa-solid " + THEME_ICONS[mode]} aria-hidden="true" />
     </button>
   );
 }

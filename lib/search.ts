@@ -74,7 +74,9 @@ interface RankableArticle {
  */
 export function rankSearchResults<T extends RankableArticle>(rows: T[], q: string): T[] {
   const terms = queryTerms(q);
-  const score = (a: T): number => {
+  // Score once per row, not per comparison — `content` can be tens of KB and
+  // lowercasing it inside the comparator would repeat that O(n log n) times.
+  const scored = rows.map((a) => {
     const title = a.title.toLowerCase();
     const excerpt = (a.excerpt || "").toLowerCase();
     const content = (a.content || "").toLowerCase();
@@ -86,14 +88,16 @@ export function rankSearchResults<T extends RankableArticle>(rows: T[], q: strin
       if (excerpt.includes(term)) s += 2;
       if (content.includes(term)) s += 1;
     }
-    return s;
-  };
-  return [...rows].sort(
-    (a, b) =>
-      score(b) - score(a) ||
-      (b.views || 0) - (a.views || 0) ||
-      b.created_at.localeCompare(a.created_at),
-  );
+    return { a, s };
+  });
+  return scored
+    .sort(
+      (x, y) =>
+        y.s - x.s ||
+        (y.a.views || 0) - (x.a.views || 0) ||
+        y.a.created_at.localeCompare(x.a.created_at),
+    )
+    .map((x) => x.a);
 }
 
 /** Crude markdown → plain text (good enough for snippet display). */

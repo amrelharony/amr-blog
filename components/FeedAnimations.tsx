@@ -1,5 +1,6 @@
 "use client";
 import { useEffect } from "react";
+import { onFeedMore } from "@/lib/feed-events";
 import { fallbackReveal, prefersReducedMotion } from "@/lib/reveal";
 
 // Feed entrance + scroll reveals. lib/gsap-anim is loaded via dynamic import
@@ -14,15 +15,13 @@ export default function FeedAnimations() {
 
     if (prefersReducedMotion()) {
       fallbackReveal();
-      const onMore = () => fallbackReveal(wrap);
-      window.addEventListener("feed:more", onMore);
-      return () => window.removeEventListener("feed:more", onMore);
+      return onFeedMore(() => fallbackReveal(wrap));
     }
 
     let cancelled = false;
     let anim: typeof import("@/lib/gsap-anim") | null = null;
 
-    const onMore = () => {
+    const offMore = onFeedMore(() => {
       if (anim) {
         anim.scrollReveals(wrap);
         wrap.querySelectorAll(".lb-card-v2").forEach((c) => anim!.cardMicro(c as HTMLElement));
@@ -30,8 +29,7 @@ export default function FeedAnimations() {
         // Cards appended before the gsap chunk arrives: just show them.
         fallbackReveal(wrap);
       }
-    };
-    window.addEventListener("feed:more", onMore);
+    });
 
     import("@/lib/gsap-anim")
       .then((A) => {
@@ -50,7 +48,7 @@ export default function FeedAnimations() {
 
     return () => {
       cancelled = true;
-      window.removeEventListener("feed:more", onMore);
+      offMore();
       anim?.killScrollTriggers();
     };
   }, []);

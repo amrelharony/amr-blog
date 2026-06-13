@@ -13,12 +13,6 @@ if (typeof window !== "undefined") {
 
 const reduced = prefersReducedMotion;
 
-export const gsapOk = () => typeof window !== "undefined" && !reduced();
-
-// Re-exported for callers that already have this chunk; gsap-free code should
-// import it from lib/reveal instead.
-export { fallbackReveal } from "@/lib/reveal";
-
 // Neutral mood profile (MOOD_PROFILES.neutral in the original).
 const P = { ds: 1, ease: "power3.out", ss: 1 };
 

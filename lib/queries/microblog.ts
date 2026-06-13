@@ -1,4 +1,5 @@
 import { createPublicClient } from "@/lib/supabase/public";
+import { sanitizeSearchQuery } from "@/lib/search";
 import type { Thought } from "@/lib/types";
 
 // Published thoughts (pinned first, newest next). RLS limits anon to
@@ -21,6 +22,8 @@ export async function getThoughts(limit = 15, offset = 0): Promise<Thought[]> {
  * published, non-scheduled rows, same as getThoughts.
  */
 export async function searchThoughts(q: string, limit = 6): Promise<Thought[]> {
+  q = sanitizeSearchQuery(q);
+  if (!q) return [];
   const sb = createPublicClient();
   const { data, error } = await sb
     .from("microblog")

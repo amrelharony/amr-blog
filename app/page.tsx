@@ -143,7 +143,7 @@ export default async function FeedPage() {
                 ))}
               </div>
             )}
-            <FeedLoadMore initialCount={articles.length} hasMore={hasMore} />
+            <FeedLoadMore initialSlugs={articles.map((a) => a.slug)} hasMore={hasMore} />
           </>
         )}
       </main>

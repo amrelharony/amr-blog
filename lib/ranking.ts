@@ -17,6 +17,11 @@ export function isTrending(a: ArticleCard): boolean {
  * tag-overlap first, views as tiebreak, top n.
  */
 export function rankRelated(pool: ArticleCard[], tags: string[], n = 4): ArticleCard[] {
-  const overlap = (a: ArticleCard) => (a.tags || []).filter((t) => tags.includes(t)).length;
-  return [...pool].sort((a, b) => overlap(b) - overlap(a) || (b.views || 0) - (a.views || 0)).slice(0, n);
+  // Overlap computed once per article, not per sort comparison.
+  const overlap = new Map(
+    pool.map((a) => [a, (a.tags || []).filter((t) => tags.includes(t)).length]),
+  );
+  return [...pool]
+    .sort((a, b) => overlap.get(b)! - overlap.get(a)! || (b.views || 0) - (a.views || 0))
+    .slice(0, n);
 }

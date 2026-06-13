@@ -4,16 +4,14 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { haptic } from "@/lib/haptics";
 import { highlight } from "@/lib/highlight";
-import { type ThemeMode, getMode, setMode } from "@/lib/theme";
-import { queryTerms, type SearchResponse } from "@/lib/search";
+import { type ThemeMode, THEME_ICONS, THEME_LABELS, applyMode, getMode } from "@/lib/theme";
+import { queryTerms } from "@/lib/search";
+import { MIN_SEARCH_QUERY, useSearch } from "@/lib/use-search";
 
 // ⌘K / Ctrl+K command palette: quick navigation, theme switching, and
 // full-text search (same /api/search endpoint as FeedSearch). Zero-dep,
 // plain CSS (.cp-*), portaled to <body> so .site-controls' stacking
 // context can't trap the fixed overlay.
-const MIN_QUERY = 2;
-const DEBOUNCE_MS = 250;
-
 type Action =
   | { kind: "push"; href: string }
   | { kind: "navigate"; href: string } // full navigation (non-HTML routes like RSS)
@@ -33,35 +31,24 @@ interface Section {
   items: Item[];
 }
 
-const THEME_LABEL: Record<ThemeMode, string> = {
-  auto: "Theme: Auto (by time of day)",
-  light: "Theme: Light",
-  dark: "Theme: Dark",
-};
-const THEME_ICON: Record<ThemeMode, string> = {
-  auto: "fa-circle-half-stroke",
-  light: "fa-sun",
-  dark: "fa-moon",
-};
-
 export default function CommandPalette() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [res, setRes] = useState<SearchResponse | null>(null);
   const [mode, setModeState] = useState<ThemeMode>("auto");
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const ctrl = useRef<AbortController | null>(null);
   const restoreFocus = useRef<HTMLElement | null>(null);
+
+  // Clears itself (and aborts in-flight fetches) when closed or below
+  // min-length; static commands keep working if the endpoint errors.
+  const { res } = useSearch(query, { enabled: open, delayMs: 250 });
 
   const close = useCallback(() => {
     setOpen(false);
     setQuery("");
-    setRes(null);
     setActiveIdx(0);
-    ctrl.current?.abort();
     haptic.menuClose();
     restoreFocus.current?.focus?.();
     restoreFocus.current = null;
@@ -102,31 +89,6 @@ export default function CommandPalette() {
     };
   }, [open]);
 
-  // Debounced search fetch, mirroring FeedSearch.
-  useEffect(() => {
-    if (!open) return;
-    const q = query.trim();
-    if (q.length < MIN_QUERY) {
-      setRes(null);
-      return;
-    }
-    const t = setTimeout(async () => {
-      ctrl.current?.abort();
-      const ac = new AbortController();
-      ctrl.current = ac;
-      try {
-        const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: ac.signal });
-        if (!r.ok) throw new Error(`search HTTP ${r.status}`);
-        const data = (await r.json()) as SearchResponse;
-        if (!ac.signal.aborted) setRes(data);
-      } catch (e) {
-        // Static commands keep working; the search groups just stay empty.
-        if (!ac.signal.aborted) console.error("[CommandPalette] search failed:", e);
-      }
-    }, DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [open, query]);
-
   const sections = useMemo<Section[]>(() => {
     const ql = query.trim().toLowerCase();
     const allCommands: Item[] = [
@@ -135,8 +97,8 @@ export default function CommandPalette() {
       { id: "nav-rss", icon: "fa-rss", label: "RSS Feed", action: { kind: "navigate", href: "/feed.xml" } },
       ...(["auto", "light", "dark"] as ThemeMode[]).map<Item>((m) => ({
         id: `theme-${m}`,
-        icon: THEME_ICON[m],
-        label: THEME_LABEL[m],
+        icon: THEME_ICONS[m],
+        label: THEME_LABELS[m],
         checked: mode === m,
         action: { kind: "theme", mode: m },
       })),
@@ -216,12 +178,9 @@ export default function CommandPalette() {
         window.location.assign(item.action.href);
         break;
       case "theme": {
-        // Exact ThemeToggle contract: persist, drop sepia, notify ThemeManager.
         const m = item.action.mode;
-        setMode(m);
+        applyMode(m); // shared persist + notify ritual (lib/theme.ts)
         setModeState(m);
-        document.documentElement.classList.remove("lb-sepia");
-        window.dispatchEvent(new Event("thememodechange"));
         haptic.toggle();
         break; // stays open so the change is visible
       }
@@ -261,8 +220,8 @@ export default function CommandPalette() {
     }
   };
 
-  const terms = queryTerms(query.trim());
-  const searching = query.trim().length >= MIN_QUERY;
+  const terms = useMemo(() => queryTerms(query.trim()), [query]);
+  const searching = query.trim().length >= MIN_SEARCH_QUERY;
   const noHits = searching && res !== null && sections.length === 0;
 
   return (

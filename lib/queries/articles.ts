@@ -1,5 +1,6 @@
 import { createPublicClient } from "@/lib/supabase/public";
 import { rankRelated } from "@/lib/ranking";
+import { sanitizeSearchQuery } from "@/lib/search";
 import type { Article, ArticleCard } from "@/lib/types";
 
 const CARD_COLUMNS =
@@ -69,10 +70,12 @@ export type SearchableArticle = ArticleCard & { content: string };
  * Full-text search over title/excerpt/body. `wfts` is PostgREST's
  * websearch_to_tsquery operator; on plain text columns Postgres applies
  * to_tsvector implicitly, so this needs no schema changes (see lib/search.ts).
- * `q` must already be sanitized (sanitizeSearchQuery) — commas/parens/quotes
- * would corrupt the .or() filter string.
+ * Sanitizes its own input — commas/parens/quotes would corrupt the .or()
+ * filter string, so this guard must live next to the interpolation.
  */
 export async function searchArticles(q: string, limit = 12): Promise<SearchableArticle[]> {
+  q = sanitizeSearchQuery(q);
+  if (!q) return [];
   const sb = createPublicClient();
   const { data, error } = await sb
     .from("longform_articles")

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ArticleCardV2 from "./ArticleCardV2";
+import { dispatchFeedMore, onFeedSearching } from "@/lib/feed-events";
 import type { ArticleCard } from "@/lib/types";
 
 // "[ LOAD MORE ]" pagination for the feed (mirrors ThoughtsFeed.loadMore).
@@ -16,25 +17,24 @@ interface FeedPage {
 }
 
 export default function FeedLoadMore({
-  initialCount,
+  initialSlugs,
   hasMore: initialHasMore,
 }: {
-  initialCount: number;
+  initialSlugs: string[];
   hasMore: boolean;
 }) {
   const [extra, setExtra] = useState<ArticleCard[]>([]);
-  const [offset, setOffset] = useState(initialCount);
+  const [offset, setOffset] = useState(initialSlugs.length);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [gridHost, setGridHost] = useState<HTMLElement | null>(null);
+  // Every slug already rendered (server page + appends), for de-duping.
+  const seen = useRef(new Set(initialSlugs));
 
   useEffect(() => {
     setGridHost(document.querySelector<HTMLElement>("#lbGrid .lb-card-grid"));
-    const onSearching = (e: Event) =>
-      setSearching(!!(e as CustomEvent<{ active?: boolean }>).detail?.active);
-    window.addEventListener("feed:searching", onSearching);
-    return () => window.removeEventListener("feed:searching", onSearching);
+    return onFeedSearching(setSearching);
   }, []);
 
   // After new cards are committed to the DOM, let FeedAnimations re-run its
@@ -43,7 +43,7 @@ export default function FeedLoadMore({
   useEffect(() => {
     if (extra.length > announced.current) {
       announced.current = extra.length;
-      window.dispatchEvent(new CustomEvent("feed:more"));
+      dispatchFeedMore();
     }
   }, [extra.length]);
 
@@ -54,15 +54,10 @@ export default function FeedLoadMore({
       const r = await fetch(`/api/feed?offset=${offset}`);
       if (!r.ok) throw new Error(`feed HTTP ${r.status}`);
       const data = (await r.json()) as FeedPage;
-      // De-dupe by slug against everything already in the grid (server cards
-      // + earlier appends): offset paging over a newest-first, mutable list
-      // can re-surface a row when posts land between ISR snapshots.
-      const seen = new Set(
-        Array.from(document.querySelectorAll('#lbGrid a[href^="/p/"]')).map((el) =>
-          decodeURIComponent((el.getAttribute("href") || "").slice("/p/".length)),
-        ),
-      );
-      const fresh = data.articles.filter((a) => !seen.has(a.slug));
+      // De-dupe by slug: offset paging over a newest-first, mutable list can
+      // re-surface a row when posts land between ISR snapshots.
+      const fresh = data.articles.filter((a) => !seen.current.has(a.slug));
+      fresh.forEach((a) => seen.current.add(a.slug));
       setExtra((x) => [...x, ...fresh]);
       setOffset((o) => o + data.articles.length);
       setHasMore(data.hasMore);
