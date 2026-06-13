@@ -318,11 +318,14 @@ function WriteEditor() {
   const del = async (id: string, slug: string) => {
     if (!confirm("Delete this article? This cannot be undone.")) return;
     const { error } = await sb.from("longform_articles").delete().eq("id", id);
-    if (!error) {
-      await revalidate(slug);
-      if (form.id === id) setEditing(false);
-      loadList();
+    if (error) {
+      toast.err("Couldn't delete the article.");
+      return;
     }
+    await revalidate(slug);
+    if (form.id === id) setEditing(false);
+    toast.ok("Article deleted.");
+    loadList();
   };
 
   const generateTldr = async () => {

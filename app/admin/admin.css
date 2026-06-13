@@ -336,3 +336,36 @@
     animation: none;
   }
 }
+
+/* Responsive (admin.css previously had no media queries). */
+@media (max-width: 640px) {
+  .adm-wrap {
+    padding: 12px 12px 80px;
+  }
+  .adm-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .adm-toolbar .adm-input,
+  .adm-toolbar .adm-select,
+  .adm-toolbar-search,
+  .adm-toolbar-select {
+    width: 100%;
+    max-width: none;
+  }
+  .adm-row {
+    flex-direction: column;
+  }
+  .adm-list-item {
+    flex-wrap: wrap;
+  }
+  .adm-list-title {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+  .adm-toast-wrap {
+    left: 12px;
+    right: 12px;
+    max-width: none;
+  }
+}

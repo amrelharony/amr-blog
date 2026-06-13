@@ -152,15 +152,28 @@ export default function AdminThoughts() {
   };
 
   const togglePin = async (t: Thought) => {
-    await sb.from("microblog").update({ pinned: !t.pinned }).eq("id", t.id);
-    await revalidate();
-    load();
+    setList((p) => p.map((x) => (x.id === t.id ? { ...x, pinned: !x.pinned } : x))); // optimistic
+    const { error } = await sb.from("microblog").update({ pinned: !t.pinned }).eq("id", t.id);
+    if (error) {
+      setList((p) => p.map((x) => (x.id === t.id ? { ...x, pinned: t.pinned } : x)));
+      toast.err("Couldn't update.");
+      return;
+    }
+    toast.ok(t.pinned ? "Unpinned." : "Pinned.");
+    revalidate();
   };
   const del = async (id: string) => {
     if (!confirm("Delete this thought?")) return;
-    await sb.from("microblog").delete().eq("id", id);
-    await revalidate();
-    load();
+    const prev = list;
+    setList((p) => p.filter((t) => t.id !== id)); // optimistic
+    const { error } = await sb.from("microblog").delete().eq("id", id);
+    if (error) {
+      setList(prev);
+      toast.err("Couldn't delete.");
+      return;
+    }
+    toast.ok("Deleted.");
+    revalidate();
   };
 
   const visible = filterSort(list, {

@@ -63,8 +63,15 @@ export default function AdminComments() {
 
   const del = async (id: string) => {
     if (!confirm("Delete this comment?")) return;
-    await sb.rpc("delete_article_comment", { p_comment_id: id });
-    load();
+    const prev = rows;
+    setRows((p) => p.filter((c) => c.id !== id)); // optimistic
+    const { error } = await sb.rpc("delete_article_comment", { p_comment_id: id });
+    if (error) {
+      setRows(prev);
+      toast.err("Couldn't delete.");
+      return;
+    }
+    toast.ok("Comment deleted.");
   };
 
   const visible = filterSort(rows, {
