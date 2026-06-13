@@ -4190,6 +4190,86 @@ body:has(.challenge-hud.show) .lb-reading-panel {
   color: #0066ff
 }
 
+/* ── Server search results (FeedSearch → /api/search) ── */
+.lb-search-results {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px;
+  margin-bottom: 24px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px)
+}
+
+.lb-sr-group+.lb-sr-group {
+  margin-top: 10px
+}
+
+.lb-sr-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--sub);
+  padding: 6px 10px 4px
+}
+
+.lb-sr-status {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--sub);
+  padding: 12px 10px
+}
+
+.lb-search-result {
+  display: block;
+  padding: 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background .15s
+}
+
+.lb-search-result:hover,
+.lb-search-result:focus-visible {
+  background: rgba(255, 255, 255, .04)
+}
+
+.light-mode .lb-search-result:hover,
+.light-mode .lb-search-result:focus-visible {
+  background: rgba(0, 0, 0, .04)
+}
+
+.lb-sr-title {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 3px
+}
+
+.lb-sr-snippet {
+  color: var(--sub);
+  font-size: 12px;
+  line-height: 1.5
+}
+
+.lb-sr-meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--sub);
+  opacity: .8
+}
+
+.lb-sr-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 10px 8px
+}
+
 /* â”€â”€ Phase 3: Related Articles â”€â”€ */
 .lb-related {
   margin-top: 48px;

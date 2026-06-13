@@ -14,3 +14,20 @@ export async function getThoughts(limit = 15, offset = 0): Promise<Thought[]> {
   if (error) throw error;
   return (data ?? []) as Thought[];
 }
+
+/**
+ * Full-text search over thought bodies (websearch syntax, implicit
+ * to_tsvector on the text column — no schema changes). RLS scopes anon to
+ * published, non-scheduled rows, same as getThoughts.
+ */
+export async function searchThoughts(q: string, limit = 6): Promise<Thought[]> {
+  const sb = createPublicClient();
+  const { data, error } = await sb
+    .from("microblog")
+    .select("*")
+    .textSearch("content", q, { type: "websearch" })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as Thought[];
+}

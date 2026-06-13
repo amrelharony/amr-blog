@@ -62,6 +62,28 @@ export async function getRelatedArticles(article: {
   return rankRelated((data ?? []) as ArticleCard[], article.tags || []);
 }
 
+/** ArticleCard plus the markdown body — used server-side to build search snippets. */
+export type SearchableArticle = ArticleCard & { content: string };
+
+/**
+ * Full-text search over title/excerpt/body. `wfts` is PostgREST's
+ * websearch_to_tsquery operator; on plain text columns Postgres applies
+ * to_tsvector implicitly, so this needs no schema changes (see lib/search.ts).
+ * `q` must already be sanitized (sanitizeSearchQuery) — commas/parens/quotes
+ * would corrupt the .or() filter string.
+ */
+export async function searchArticles(q: string, limit = 12): Promise<SearchableArticle[]> {
+  const sb = createPublicClient();
+  const { data, error } = await sb
+    .from("longform_articles")
+    .select(`${CARD_COLUMNS},content`)
+    .eq("published", true)
+    .or(`title.wfts.${q},excerpt.wfts.${q},content.wfts.${q}`)
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as SearchableArticle[];
+}
+
 /** Published articles carrying a given tag, newest first. */
 export async function getArticlesByTag(tag: string, limit = 50): Promise<ArticleCard[]> {
   const sb = createPublicClient();
