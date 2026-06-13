@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getFeedArticles } from "@/lib/queries/articles";
 import { fmtDate } from "@/lib/format";
+import { rxCount, isTrending } from "@/lib/ranking";
 import type { ArticleCard } from "@/lib/types";
 import FeedAnimations from "@/components/FeedAnimations";
 import FeedTitle from "@/components/FeedTitle";
@@ -13,12 +14,6 @@ import ReaderStats from "@/components/ReaderStats";
 // ISR — feed revalidates every 5 min and on-demand via /api/revalidate (tag 'articles').
 export const revalidate = 300;
 
-function rxCount(r: Record<string, number> | null | undefined): number {
-  return Object.values(r || {}).reduce((s, n) => s + (n || 0), 0);
-}
-function isTrending(a: ArticleCard): boolean {
-  return (a.views || 0) >= 50 || rxCount(a.reactions) >= 10;
-}
 function topTags(list: ArticleCard[], n = 10): string[] {
   const counts: Record<string, number> = {};
   for (const a of list) for (const t of a.tags || []) counts[t] = (counts[t] || 0) + 1;

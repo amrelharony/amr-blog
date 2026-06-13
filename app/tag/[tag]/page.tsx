@@ -2,19 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getArticlesByTag } from "@/lib/queries/articles";
 import { fmtDate } from "@/lib/format";
-import type { ArticleCard } from "@/lib/types";
+import { rxCount, isTrending } from "@/lib/ranking";
 import FeedAnimations from "@/components/FeedAnimations";
 
 export const revalidate = 300;
 
 type Params = { params: Promise<{ tag: string }> };
-
-function rxCount(r: Record<string, number> | null | undefined): number {
-  return Object.values(r || {}).reduce((s, n) => s + (n || 0), 0);
-}
-function isTrending(a: ArticleCard): boolean {
-  return (a.views || 0) >= 50 || rxCount(a.reactions) >= 10;
-}
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { tag } = await params;

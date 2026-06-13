@@ -1,4 +1,5 @@
 import { createPublicClient } from "@/lib/supabase/public";
+import { rankRelated } from "@/lib/ranking";
 import type { Article, ArticleCard } from "@/lib/types";
 
 const CARD_COLUMNS =
@@ -58,11 +59,7 @@ export async function getRelatedArticles(article: {
     .order("created_at", { ascending: false })
     .limit(20);
   if (error) throw error;
-  const tags = article.tags || [];
-  const pool = (data ?? []) as ArticleCard[];
-  const overlap = (a: ArticleCard) => (a.tags || []).filter((t) => tags.includes(t)).length;
-  pool.sort((a, b) => overlap(b) - overlap(a) || (b.views || 0) - (a.views || 0));
-  return pool.slice(0, 4);
+  return rankRelated((data ?? []) as ArticleCard[], article.tags || []);
 }
 
 /** Published articles carrying a given tag, newest first. */
