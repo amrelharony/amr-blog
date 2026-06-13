@@ -129,12 +129,21 @@ function WriteEditor() {
     checkDraft("");
   };
 
-  // Open a fresh editor when navigated with ?new (e.g. from the ⌘K palette);
-  // re-runs on query change so it works even when already on this page.
+  // Open a fresh editor when navigated with ?new (handles cross-page nav from
+  // the ⌘K palette / bookmarks).
   useEffect(() => {
     if (searchParams.get("new") !== null) startNew();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+
+  // Same-page "New article" from the palette: router.push to the current URL
+  // won't change searchParams, so the palette also fires this event.
+  useEffect(() => {
+    const onNew = () => startNew();
+    window.addEventListener("admin:new-article", onNew);
+    return () => window.removeEventListener("admin:new-article", onNew);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const startEdit = async (id: string) => {
     const seq = ++editSeq.current;
@@ -411,6 +420,7 @@ function WriteEditor() {
       sort: listSort,
       comparators: LIST_COMPARATORS,
     });
+    const selectedVisible = visible.reduce((n, a) => n + (selected.has(a.id) ? 1 : 0), 0);
     const allSelected = visible.length > 0 && visible.every((a) => selected.has(a.id));
     const toggleAll = () =>
       setSelected(allSelected ? new Set() : new Set(visible.map((a) => a.id)));
@@ -467,7 +477,7 @@ function WriteEditor() {
           selectable
           allSelected={allSelected}
           onToggleAll={toggleAll}
-          selectedCount={selected.size}
+          selectedCount={selectedVisible}
           onBulkDelete={bulkDelete}
           bulkDeleteLabel="Delete selected"
           onClearSelection={() => setSelected(new Set())}

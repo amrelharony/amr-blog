@@ -82,6 +82,7 @@ export default function AdminComments() {
     sort: sortF,
     comparators: C_COMPARATORS,
   });
+  const selectedVisible = visible.reduce((n, c) => n + (selected.has(c.id) ? 1 : 0), 0);
   const allSelected = visible.length > 0 && visible.every((c) => selected.has(c.id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(visible.map((c) => c.id)));
   const toggleOne = (id: string) =>
@@ -129,7 +130,7 @@ export default function AdminComments() {
         selectable
         allSelected={allSelected}
         onToggleAll={toggleAll}
-        selectedCount={selected.size}
+        selectedCount={selectedVisible}
         onBulkDelete={bulkDelete}
         bulkDeleteLabel="Delete selected"
         onClearSelection={() => setSelected(new Set())}

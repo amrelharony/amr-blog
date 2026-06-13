@@ -14,6 +14,7 @@ import { type ThemeMode, THEME_ICONS, THEME_LABELS, applyMode, getMode } from "@
 type Action =
   | { kind: "push"; href: string }
   | { kind: "navigate"; href: string }
+  | { kind: "new-article" }
   | { kind: "theme"; mode: ThemeMode }
   | { kind: "logout" };
 
@@ -92,7 +93,7 @@ export default function AdminCommandPalette() {
     const nav: Item[] = [
       { id: "dash", icon: "fa-gauge", label: "Dashboard", action: { kind: "push", href: "/admin" } },
       { id: "write", icon: "fa-pen", label: "Write — article list", action: { kind: "push", href: "/admin/write" } },
-      { id: "new-article", icon: "fa-plus", label: "New article", action: { kind: "push", href: "/admin/write?new" } },
+      { id: "new-article", icon: "fa-plus", label: "New article", action: { kind: "new-article" } },
       { id: "thoughts", icon: "fa-comment-dots", label: "Thoughts", action: { kind: "push", href: "/admin/thoughts" } },
       { id: "subscribers", icon: "fa-users", label: "Subscribers", action: { kind: "push", href: "/admin/subscribers" } },
       { id: "comments", icon: "fa-comments", label: "Comments", action: { kind: "push", href: "/admin/comments" } },
@@ -141,6 +142,13 @@ export default function AdminCommandPalette() {
       case "navigate":
         close();
         window.location.assign(item.action.href);
+        break;
+      case "new-article":
+        // ?new handles cross-page navigation; the event handles the same-page
+        // case (router.push to an unchanged URL won't re-fire the effect).
+        close();
+        router.push("/admin/write?new=1");
+        window.dispatchEvent(new Event("admin:new-article"));
         break;
       case "logout":
         close();

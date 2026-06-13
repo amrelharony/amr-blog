@@ -184,6 +184,7 @@ export default function AdminThoughts() {
     sort: sortF,
     comparators: T_COMPARATORS,
   });
+  const selectedVisible = visible.reduce((n, t) => n + (selected.has(t.id) ? 1 : 0), 0);
   const allSelected = visible.length > 0 && visible.every((t) => selected.has(t.id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(visible.map((t) => t.id)));
   const toggleOne = (id: string) =>
@@ -281,7 +282,7 @@ export default function AdminThoughts() {
         selectable
         allSelected={allSelected}
         onToggleAll={toggleAll}
-        selectedCount={selected.size}
+        selectedCount={selectedVisible}
         onBulkDelete={bulkDelete}
         bulkDeleteLabel="Delete selected"
         onClearSelection={() => setSelected(new Set())}

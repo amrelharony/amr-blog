@@ -98,6 +98,7 @@ export default function AdminSubscribers() {
     sort: sortF,
     comparators: S_COMPARATORS,
   });
+  const selectedVisible = visible.reduce((n, s) => n + (selected.has(s.id) ? 1 : 0), 0);
   const allSelected = visible.length > 0 && visible.every((s) => selected.has(s.id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(visible.map((s) => s.id)));
   const toggleOne = (id: string) =>
@@ -155,7 +156,7 @@ export default function AdminSubscribers() {
         selectable
         allSelected={allSelected}
         onToggleAll={toggleAll}
-        selectedCount={selected.size}
+        selectedCount={selectedVisible}
         onBulkExport={bulkExport}
         bulkExportLabel="Export selection"
         onBulkDelete={bulkDelete}
