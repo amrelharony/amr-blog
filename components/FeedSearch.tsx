@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { fmtDate } from "@/lib/format";
+import { highlight } from "@/lib/highlight";
 import { queryTerms, type SearchResponse } from "@/lib/search";
 
 // Wires the homepage search box to the /api/search full-text endpoint. The
@@ -13,18 +14,6 @@ import { queryTerms, type SearchResponse } from "@/lib/search";
 // original in-place DOM filter over the rendered cards.
 const MIN_QUERY = 2;
 const DEBOUNCE_MS = 300;
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** Wrap query-term hits in <mark>, via text splitting (no HTML injection). */
-function highlight(text: string, terms: string[]): ReactNode {
-  if (!text || terms.length === 0) return text;
-  const re = new RegExp(`(${terms.map(escapeRegExp).join("|")})`, "gi");
-  // With a single capturing group, odd indices of split() are the matches.
-  return text.split(re).map((part, i) => (i % 2 === 1 ? <mark key={i}>{part}</mark> : part));
-}
 
 export default function FeedSearch() {
   const [host, setHost] = useState<HTMLElement | null>(null);
