@@ -122,6 +122,9 @@ export default function WritePage() {
   // Debounced autosave of the in-progress form to localStorage.
   useEffect(() => {
     if (!editing) return;
+    // Hold off while a restore decision is pending, so edits can't overwrite
+    // the very draft the author may want to restore.
+    if (draft) return;
     if (skipPersist.current) {
       skipPersist.current = false;
       return;
@@ -135,7 +138,7 @@ export default function WritePage() {
       }
     }, 800);
     return () => clearTimeout(t);
-  }, [form, editing]);
+  }, [form, editing, draft]);
 
   // Warn before navigating away from unsaved changes.
   useEffect(() => {
