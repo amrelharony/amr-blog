@@ -1,22 +1,56 @@
 "use client";
 import { useEffect } from "react";
-import * as A from "@/lib/gsap-anim";
+import { onFeedMore } from "@/lib/feed-events";
+import { fallbackReveal, prefersReducedMotion } from "@/lib/reveal";
 
+// Feed entrance + scroll reveals. lib/gsap-anim is loaded via dynamic import
+// so gsap stays out of the initial bundle; reduced-motion visitors never
+// download it at all. Also listens for FeedLoadMore's "feed:more" event to
+// reveal freshly appended cards (scrollReveals/cardMicro are idempotent —
+// they skip .gsap-revealed / _gsapMicro nodes).
 export default function FeedAnimations() {
   useEffect(() => {
     const wrap = document.querySelector(".lb-wrap") as HTMLElement | null;
     if (!wrap) return;
-    if (!A.gsapOk()) {
-      A.fallbackReveal();
-      return;
+
+    if (prefersReducedMotion()) {
+      fallbackReveal();
+      return onFeedMore(() => fallbackReveal(wrap));
     }
-    A.addGsapActive();
-    A.feedEntrance(wrap);
-    A.scrollReveals(wrap);
-    const hero = wrap.querySelector(".lb-hero") as HTMLElement | null;
-    if (hero) A.heroParallax(hero);
-    wrap.querySelectorAll(".lb-card-v2").forEach((c) => A.cardMicro(c as HTMLElement));
-    return () => A.killScrollTriggers();
+
+    let cancelled = false;
+    let anim: typeof import("@/lib/gsap-anim") | null = null;
+
+    const offMore = onFeedMore(() => {
+      if (anim) {
+        anim.scrollReveals(wrap);
+        wrap.querySelectorAll(".lb-card-v2").forEach((c) => anim!.cardMicro(c as HTMLElement));
+      } else {
+        // Cards appended before the gsap chunk arrives: just show them.
+        fallbackReveal(wrap);
+      }
+    });
+
+    import("@/lib/gsap-anim")
+      .then((A) => {
+        if (cancelled) return;
+        anim = A;
+        A.addGsapActive();
+        A.feedEntrance(wrap);
+        A.scrollReveals(wrap);
+        const hero = wrap.querySelector(".lb-hero") as HTMLElement | null;
+        if (hero) A.heroParallax(hero);
+        wrap.querySelectorAll(".lb-card-v2").forEach((c) => A.cardMicro(c as HTMLElement));
+      })
+      .catch(() => {
+        if (!cancelled) fallbackReveal();
+      });
+
+    return () => {
+      cancelled = true;
+      offMore();
+      anim?.killScrollTriggers();
+    };
   }, []);
   return null;
 }

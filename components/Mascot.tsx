@@ -1,6 +1,5 @@
 "use client";
 import { useEffect } from "react";
-import { gsap } from "gsap";
 import { haptic } from "@/lib/haptics";
 import { ensureAnonSession } from "@/lib/supabase/anon";
 
@@ -33,7 +32,6 @@ export default function Mascot() {
     w.__mascotBooted = true;
 
     // Shims the verbatim modules expect (audio globals are intentionally absent → guarded no-op).
-    w.gsap = w.gsap || gsap;
     w._haptic = w._haptic || haptic;
     w._peripheralsShown = true;
     w.autoDismiss3D = w.autoDismiss3D || (() => {});
@@ -54,7 +52,18 @@ export default function Mascot() {
 
     const idle = (cb: () => void) =>
       w.requestIdleCallback ? w.requestIdleCallback(cb, { timeout: 3000 }) : window.setTimeout(cb, 1200);
-    idle(() => loadSeq(0));
+    idle(async () => {
+      // gsap is dynamic-imported here (not at module top) so it loads at idle
+      // time with the rest of the mascot stack, off the critical path.
+      if (!w.gsap) {
+        try {
+          w.gsap = (await import("gsap")).gsap;
+        } catch (e) {
+          console.warn("[Mascot] gsap failed to load:", e);
+        }
+      }
+      loadSeq(0);
+    });
   }, []);
 
   return null;

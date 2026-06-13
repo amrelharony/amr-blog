@@ -1,24 +1,23 @@
 import Link from "next/link";
 import { getFeedArticles } from "@/lib/queries/articles";
 import { fmtDate } from "@/lib/format";
+import { isTrending } from "@/lib/ranking";
+import { FEED_PAGE_SIZE } from "@/lib/constants";
 import type { ArticleCard } from "@/lib/types";
+import ArticleCardV2 from "@/components/ArticleCardV2";
 import FeedAnimations from "@/components/FeedAnimations";
+import FeedLoadMore from "@/components/FeedLoadMore";
 import FeedTitle from "@/components/FeedTitle";
 import FeedSearch from "@/components/FeedSearch";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import ContinueReading from "@/components/ContinueReading";
+import ForYou from "@/components/ForYou";
 import CollectionsStrip from "@/components/CollectionsStrip";
 import ReaderStats from "@/components/ReaderStats";
 
 // ISR — feed revalidates every 5 min and on-demand via /api/revalidate (tag 'articles').
 export const revalidate = 300;
 
-function rxCount(r: Record<string, number> | null | undefined): number {
-  return Object.values(r || {}).reduce((s, n) => s + (n || 0), 0);
-}
-function isTrending(a: ArticleCard): boolean {
-  return (a.views || 0) >= 50 || rxCount(a.reactions) >= 10;
-}
 function topTags(list: ArticleCard[], n = 10): string[] {
   const counts: Record<string, number> = {};
   for (const a of list) for (const t of a.tags || []) counts[t] = (counts[t] || 0) + 1;
@@ -28,7 +27,10 @@ function topTags(list: ArticleCard[], n = 10): string[] {
 }
 
 export default async function FeedPage() {
-  const articles = await getFeedArticles();
+  // One extra row as the has-more sentinel; /api/feed serves later pages.
+  const rows = await getFeedArticles(FEED_PAGE_SIZE + 1);
+  const hasMore = rows.length > FEED_PAGE_SIZE;
+  const articles = hasMore ? rows.slice(0, FEED_PAGE_SIZE) : rows;
   const hero = articles[0];
   const rest = articles.slice(1);
   const tags = topTags(articles);
@@ -77,6 +79,7 @@ export default async function FeedPage() {
 
       <ReaderStats />
       <ContinueReading />
+      <ForYou />
       <CollectionsStrip />
 
       <main id="lbGrid" role="feed" aria-label="Article list">
@@ -137,56 +140,12 @@ export default async function FeedPage() {
 
             {rest.length > 0 && (
               <div className="lb-card-grid">
-                {rest.map((a, idx) => {
-                  const rc = rxCount(a.reactions);
-                  return (
-                    <Link
-                      key={a.id}
-                      className="lb-card-v2 lb-reveal"
-                      style={{ transitionDelay: `${((idx % 2) * 0.07).toFixed(2)}s` }}
-                      href={`/p/${a.slug}`}
-                      aria-label={a.title}
-                    >
-                      {a.cover_image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img className="lb-card-v2-img" src={a.cover_image} alt={a.title} loading="lazy" />
-                      ) : (
-                        <div className="lb-card-v2-fallback">
-                          <i className="fa-solid fa-feather-pointed" />
-                        </div>
-                      )}
-                      <div className="lb-card-v2-body">
-                        <div className="lb-card-v2-date">
-                          {fmtDate(a.created_at)}
-                          {isTrending(a) && (
-                            <span className="lb-trending-badge">
-                              {" "}
-                              <i className="fa-solid fa-fire" /> TRENDING
-                            </span>
-                          )}
-                        </div>
-                        <div className="lb-card-v2-title">{a.title}</div>
-                        <div className="lb-card-v2-excerpt">{(a.excerpt || "").slice(0, 120)}</div>
-                        <div className="lb-card-v2-footer">
-                          <div className="lb-card-v2-tags">
-                            {(a.tags || []).slice(0, 2).map((t) => (
-                              <span key={t} className="lb-card-tag">
-                                {t}
-                              </span>
-                            ))}
-                            {a.series_name && <span className="lb-series-badge">{a.series_name}</span>}
-                          </div>
-                          <div className="lb-card-v2-stats lb-social-proof">
-                            <span>👁 {a.views || 0}</span>
-                            {rc > 0 && <span>❤ {rc}</span>}
-                          </div>
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
+                {rest.map((a, idx) => (
+                  <ArticleCardV2 key={a.id} a={a} idx={idx} />
+                ))}
               </div>
             )}
+            <FeedLoadMore initialSlugs={articles.map((a) => a.slug)} hasMore={hasMore} />
           </>
         )}
       </main>

@@ -32,6 +32,7 @@ interface ReadingEntry {
   slug?: string;
   title?: string;
   cover_image?: string;
+  tags?: string[];
   last_read_at: string;
   time_spent: number;
   progress: number;
@@ -43,11 +44,13 @@ export default function ReadingTracker({
   slug,
   title,
   coverImage,
+  tags,
 }: {
   articleId: string;
   slug: string;
   title: string;
   coverImage: string;
+  tags?: string[];
 }) {
   useEffect(() => {
     const sb = getBrowserClient();
@@ -64,6 +67,9 @@ export default function ReadingTracker({
       slug,
       title,
       cover_image: coverImage || "",
+      // Persist tags for the "For You" affinity profile; keep prior tags if a
+      // re-read somehow passes none, so the signal is never wiped.
+      tags: tags?.length ? tags : existing?.tags || [],
       last_read_at: new Date().toISOString(),
       time_spent: timeSpent,
       progress,
@@ -124,7 +130,7 @@ export default function ReadingTracker({
       }
       sync();
     };
-  }, [articleId, slug, title, coverImage]);
+  }, [articleId, slug, title, coverImage, tags]);
 
   return null;
 }

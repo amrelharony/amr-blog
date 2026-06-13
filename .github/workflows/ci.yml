@@ -1,0 +1,42 @@
+# Quality gates: lint + typecheck + unit tests on every push/PR.
+#
+# There is intentionally NO `next build` step: the build prerenders /, /p/[slug],
+# /feed.xml and /sitemap.xml, all of which fetch live data from Supabase
+# (lib/supabase/public.ts requires NEXT_PUBLIC_SUPABASE_URL/_ANON_KEY and
+# network access; the queries throw on failure, failing the build). Vercel
+# remains the real build gate. To add a CI build later, set the two secrets
+# below and uncomment the build job.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22" # next 16 requires >= 20.9
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+  # build:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: "22"
+  #         cache: npm
+  #     - run: npm ci
+  #     - run: npm run build
+  #       env:
+  #         NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+  #         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}

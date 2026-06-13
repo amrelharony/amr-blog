@@ -1,18 +1,20 @@
 import { createPublicClient } from "@/lib/supabase/public";
+import { rankRelated } from "@/lib/ranking";
+import { sanitizeSearchQuery } from "@/lib/search";
 import type { Article, ArticleCard } from "@/lib/types";
 
 const CARD_COLUMNS =
   "id,title,slug,excerpt,created_at,tags,views,reactions,cover_image,series_name";
 
-/** Published articles for the feed, newest first. */
-export async function getFeedArticles(limit = 50): Promise<ArticleCard[]> {
+/** Published articles for the feed, newest first (range-paged for load-more). */
+export async function getFeedArticles(limit = 50, offset = 0): Promise<ArticleCard[]> {
   const sb = createPublicClient();
   const { data, error } = await sb
     .from("longform_articles")
     .select(CARD_COLUMNS)
     .eq("published", true)
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
   if (error) throw error;
   return (data ?? []) as ArticleCard[];
 }
@@ -58,11 +60,31 @@ export async function getRelatedArticles(article: {
     .order("created_at", { ascending: false })
     .limit(20);
   if (error) throw error;
-  const tags = article.tags || [];
-  const pool = (data ?? []) as ArticleCard[];
-  const overlap = (a: ArticleCard) => (a.tags || []).filter((t) => tags.includes(t)).length;
-  pool.sort((a, b) => overlap(b) - overlap(a) || (b.views || 0) - (a.views || 0));
-  return pool.slice(0, 4);
+  return rankRelated((data ?? []) as ArticleCard[], article.tags || []);
+}
+
+/** ArticleCard plus the markdown body — used server-side to build search snippets. */
+export type SearchableArticle = ArticleCard & { content: string };
+
+/**
+ * Full-text search over title/excerpt/body. `wfts` is PostgREST's
+ * websearch_to_tsquery operator; on plain text columns Postgres applies
+ * to_tsvector implicitly, so this needs no schema changes (see lib/search.ts).
+ * Sanitizes its own input — commas/parens/quotes would corrupt the .or()
+ * filter string, so this guard must live next to the interpolation.
+ */
+export async function searchArticles(q: string, limit = 12): Promise<SearchableArticle[]> {
+  q = sanitizeSearchQuery(q);
+  if (!q) return [];
+  const sb = createPublicClient();
+  const { data, error } = await sb
+    .from("longform_articles")
+    .select(`${CARD_COLUMNS},content`)
+    .eq("published", true)
+    .or(`title.wfts.${q},excerpt.wfts.${q},content.wfts.${q}`)
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as SearchableArticle[];
 }
 
 /** Published articles carrying a given tag, newest first. */

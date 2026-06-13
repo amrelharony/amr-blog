@@ -1,18 +1,17 @@
 "use client";
 // GSAP blog animations — ported from Js/blog-gsap.js (neutral mood profile; the
-// standalone blog has no emotion engine). Client-only; used from animation components.
+// standalone blog has no emotion engine). Client-only; loaded via dynamic
+// import() from the animation components so gsap stays out of the shared
+// first-load bundle.
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { prefersReducedMotion } from "@/lib/reveal";
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger);
 }
 
-const reduced = () =>
-  typeof window !== "undefined" &&
-  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-export const gsapOk = () => typeof window !== "undefined" && !reduced();
+const reduced = prefersReducedMotion;
 
 // Neutral mood profile (MOOD_PROFILES.neutral in the original).
 const P = { ds: 1, ease: "power3.out", ss: 1 };
@@ -22,13 +21,6 @@ export function addGsapActive() {
 }
 export function removeGsapActive() {
   document.body.classList.remove("gsap-active");
-}
-
-/** Fallback when GSAP is unavailable / reduced-motion: just reveal everything. */
-export function fallbackReveal(root: ParentNode = document) {
-  root
-    .querySelectorAll(".lb-reveal, .lb-reveal-left")
-    .forEach((el) => el.classList.add("visible"));
 }
 
 // ─── Feed entrance ───

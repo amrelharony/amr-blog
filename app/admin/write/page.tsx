@@ -1,7 +1,9 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import { slugify, fmtDate } from "@/lib/format";
+import { isSlugTaken } from "@/lib/slug";
+import { relTime } from "@/lib/microblog-format";
 
 interface Row {
   id: string;
@@ -23,6 +25,7 @@ const EMPTY = {
   series_name: "",
   series_order: "0",
   scheduled: "",
+  tldr: "",
 };
 
 function toLocalInput(iso: string | null): string {
@@ -31,6 +34,10 @@ function toLocalInput(iso: string | null): string {
   const off = d.getTimezoneOffset();
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16);
 }
+
+type FormState = typeof EMPTY;
+// Per-article localStorage autosave key (new articles share one "new" slot).
+const draftKey = (id: string) => `_lb_article_draft_${id || "new"}`;
 
 export default function WritePage() {
   const sb = getBrowserClient();
@@ -41,6 +48,15 @@ export default function WritePage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ t: string; ok: boolean } | null>(null);
   const [reviewUrl, setReviewUrl] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const [draft, setDraft] = useState<{ form: FormState; at: number } | null>(null);
+  // Skip the first autosave write after a load so it can't clobber an existing
+  // draft before the author decides whether to restore it.
+  const skipPersist = useRef(true);
+  // Monotonic guard so a slow startEdit fetch can't apply after a newer
+  // startEdit/startNew (rapid clicks on different list items would otherwise
+  // pair one article's form with another's restore banner).
+  const editSeq = useRef(0);
 
   const loadList = useCallback(async () => {
     const { data } = await sb
@@ -53,19 +69,42 @@ export default function WritePage() {
     loadList();
   }, [loadList]);
 
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: string, v: string) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    setDirty(true);
+  };
+
+  // Surface an unsaved localStorage draft for restore (set before loading form).
+  const checkDraft = (id: string) => {
+    try {
+      const raw = localStorage.getItem(draftKey(id));
+      if (!raw) return setDraft(null);
+      const d = JSON.parse(raw);
+      if (d?.form?.title !== undefined) setDraft({ form: d.form, at: d.at || 0 });
+      else setDraft(null);
+    } catch {
+      setDraft(null);
+    }
+  };
 
   const startNew = () => {
+    editSeq.current++; // supersede any in-flight startEdit
+    skipPersist.current = true;
     setForm({ ...EMPTY });
     setSlugLocked(false);
     setReviewUrl("");
     setMsg(null);
+    setDirty(false);
     setEditing(true);
+    checkDraft("");
   };
 
   const startEdit = async (id: string) => {
+    const seq = ++editSeq.current;
     const { data } = await sb.from("longform_articles").select("*").eq("id", id).single();
-    if (!data) return;
+    // Bail if a newer startEdit/startNew has since taken over.
+    if (seq !== editSeq.current || !data) return;
+    skipPersist.current = true;
     setForm({
       id: data.id,
       title: data.title || "",
@@ -77,11 +116,69 @@ export default function WritePage() {
       series_name: data.series_name || "",
       series_order: String(data.series_order ?? 0),
       scheduled: toLocalInput(data.scheduled_at),
+      tldr: data.tldr || "",
     });
     setSlugLocked(true);
     setReviewUrl("");
     setMsg(null);
+    setDirty(false);
     setEditing(true);
+    checkDraft(id);
+  };
+
+  // Debounced autosave of the in-progress form to localStorage.
+  useEffect(() => {
+    if (!editing) return;
+    // Hold off while a restore decision is pending, so edits can't overwrite
+    // the very draft the author may want to restore.
+    if (draft) return;
+    if (skipPersist.current) {
+      skipPersist.current = false;
+      return;
+    }
+    const k = draftKey(form.id);
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(k, JSON.stringify({ form, at: Date.now() }));
+      } catch {
+        /* quota — ignore */
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [form, editing, draft]);
+
+  // Warn before navigating away from unsaved changes.
+  useEffect(() => {
+    if (!editing || !dirty) return;
+    const h = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [editing, dirty]);
+
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(draftKey(form.id));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const restoreDraft = () => {
+    if (!draft) return;
+    skipPersist.current = true;
+    setForm(draft.form);
+    setSlugLocked(true);
+    setDraft(null);
+    setDirty(true);
+    setMsg({ t: "Draft restored.", ok: true });
+  };
+
+  const discardDraft = () => {
+    clearDraft();
+    setDraft(null);
   };
 
   const revalidate = async (slug: string) => {
@@ -129,6 +226,7 @@ export default function WritePage() {
       tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
       series_name: form.series_name.trim() || null,
       series_order: Number(form.series_order) || 0,
+      tldr: form.tldr.trim() || null,
     };
     if (mode === "publish") {
       row.published = true;
@@ -149,18 +247,29 @@ export default function WritePage() {
     }
 
     try {
+      let savedId = form.id;
       if (form.id) {
         await sb.rpc("save_article_version", { p_article_id: form.id }); // snapshot before overwrite
         const { error } = await sb.from("longform_articles").update(row).eq("id", form.id);
         if (error) throw error;
       } else {
-        const { error } = await sb.from("longform_articles").insert(row);
+        // Capture the new id so a second save updates (not re-inserts) and so
+        // autosave moves off the shared "new" draft slot onto this article.
+        const { data: inserted, error } = await sb
+          .from("longform_articles")
+          .insert(row)
+          .select("id")
+          .single();
         if (error) throw error;
+        savedId = inserted?.id || "";
       }
       await revalidate(slug);
+      clearDraft(); // clears the key for the slot we saved under (form.id here)
+      setDirty(false);
       setMsg({ t: "Saved.", ok: true });
       setSlugLocked(true);
-      setForm((f) => ({ ...f, slug }));
+      skipPersist.current = true; // don't let the form update below re-create the draft
+      setForm((f) => ({ ...f, slug, id: savedId }));
       loadList();
     } catch (e) {
       setMsg({ t: "Save failed: " + (e as Error).message, ok: false });
@@ -176,6 +285,30 @@ export default function WritePage() {
       await revalidate(slug);
       if (form.id === id) setEditing(false);
       loadList();
+    }
+  };
+
+  const generateTldr = async () => {
+    if (!form.content.trim()) {
+      setMsg({ t: "Write the article content first.", ok: false });
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await fetch("/api/admin/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: form.title, content: form.content }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+      set("tldr", data.tldr);
+      setMsg({ t: "TL;DR generated — review and edit before saving.", ok: true });
+    } catch (e) {
+      setMsg({ t: "TL;DR failed: " + (e as Error).message, ok: false });
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -235,6 +368,20 @@ export default function WritePage() {
         )}
       </div>
 
+      {draft && (
+        <div className="adm-msg ok" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span>
+            Unsaved draft found{draft.at ? ` (${relTime(new Date(draft.at).toISOString())})` : ""}.
+          </span>
+          <button className="adm-btn" onClick={restoreDraft}>
+            Restore
+          </button>
+          <button className="adm-btn" onClick={discardDraft}>
+            Discard
+          </button>
+        </div>
+      )}
+
       <div className="adm-card">
         <div className="adm-field">
           <label className="adm-label">Title</label>
@@ -251,6 +398,11 @@ export default function WritePage() {
           <div className="adm-field">
             <label className="adm-label">Slug</label>
             <input className="adm-input" value={form.slug} onChange={(e) => { setSlugLocked(true); set("slug", e.target.value); }} />
+            {isSlugTaken((form.slug || slugify(form.title)).trim(), form.id, list) && (
+              <div className="adm-msg err" style={{ marginTop: 6 }}>
+                Another article already uses this slug.
+              </div>
+            )}
           </div>
           <div className="adm-field">
             <label className="adm-label">Tags (comma-separated)</label>
@@ -260,6 +412,23 @@ export default function WritePage() {
         <div className="adm-field">
           <label className="adm-label">Excerpt</label>
           <input className="adm-input" value={form.excerpt} onChange={(e) => set("excerpt", e.target.value)} />
+        </div>
+        <div className="adm-field">
+          <label className="adm-label">
+            TL;DR (AI summary — shown atop the article)
+          </label>
+          <textarea
+            className="adm-textarea"
+            style={{ minHeight: 70 }}
+            value={form.tldr}
+            onChange={(e) => set("tldr", e.target.value)}
+            placeholder="Generate from the content below, then edit. Leave blank to hide."
+          />
+          <div style={{ marginTop: 6 }}>
+            <button className="adm-btn" type="button" disabled={busy} onClick={generateTldr}>
+              ✨ Generate TL;DR
+            </button>
+          </div>
         </div>
         <div className="adm-row">
           <div className="adm-field">

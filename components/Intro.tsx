@@ -1,8 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { gsap } from "gsap";
 import { getPhase } from "@/lib/weather-palette";
-import { selectVariation } from "@/lib/intro/select";
 import type { IntroCtx } from "@/lib/intro/types";
 
 // Intro SHELL/orchestrator. Owns the #blog-intro overlay, reduced-motion skip, skip
@@ -10,6 +8,9 @@ import type { IntroCtx } from "@/lib/intro/types";
 // several variations (different rendering tech) via the smart selector and runs it into
 // .intro-root. SSR-rendered so it covers content from first paint (content stays in the DOM
 // beneath → SEO intact; a <noscript> rule in layout.tsx hides it without JS).
+// gsap + the variations are dynamic-imported (one async chunk) so the whole intro
+// machinery stays out of the shared first-load bundle; the overlay covers the page
+// while the chunk loads, and a pre-chunk safety timeout dismisses it if that hangs.
 export default function Intro() {
   const [gone, setGone] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -55,67 +56,97 @@ export default function Intro() {
       light: document.documentElement.classList.contains("light-mode"),
     };
 
-    let cleanupVar: () => void = () => {};
-    let finished = false;
-    const wipe = () => {
-      if (finished) return;
-      finished = true;
-      try {
-        cleanupVar();
-      } catch {}
-      gsap.to(overlay, {
-        clipPath: "inset(0 0 100% 0)",
-        duration: 0.7,
-        ease: "power4.inOut",
-        onComplete: () => {
-          setGone(true);
-          window.dispatchEvent(new Event("blog:intro-done"));
-        },
-      });
-    };
+    let cancelled = false;
+    let teardown: () => void = () => {};
+    // If the animation chunk never arrives, drop the overlay rather than
+    // covering the page forever. Cleared as soon as the import resolves.
+    const chunkSafety = window.setTimeout(() => setGone(true), 5000);
 
-    let runRes: { done: Promise<void>; cleanup: () => void };
-    try {
-      runRes = selectVariation(ctx).run(ctx);
-    } catch (e) {
-      console.warn("[intro] variation failed:", e);
-      setGone(true);
-      return;
-    }
-    cleanupVar = runRes.cleanup;
-    // ?introhold freezes the intro (no auto-wipe / skip / safety) for inspection.
-    let hold = false;
-    try {
-      hold = new URLSearchParams(location.search).has("introhold");
-    } catch {}
-    if (hold) {
-      return () => {
+    (async () => {
+      let gsap: typeof import("gsap").gsap;
+      let selectVariation: typeof import("@/lib/intro/select").selectVariation;
+      try {
+        const [g, s] = await Promise.all([import("gsap"), import("@/lib/intro/select")]);
+        gsap = g.gsap;
+        selectVariation = s.selectVariation;
+      } catch (e) {
+        console.warn("[intro] animation chunk failed to load:", e);
+        window.clearTimeout(chunkSafety);
+        if (!cancelled) setGone(true);
+        return;
+      }
+      window.clearTimeout(chunkSafety);
+      if (cancelled) return;
+
+      let cleanupVar: () => void = () => {};
+      let finished = false;
+      const wipe = () => {
+        if (finished) return;
+        finished = true;
         try {
           cleanupVar();
         } catch {}
+        gsap.to(overlay, {
+          clipPath: "inset(0 0 100% 0)",
+          duration: 0.7,
+          ease: "power4.inOut",
+          onComplete: () => {
+            setGone(true);
+            window.dispatchEvent(new Event("blog:intro-done"));
+          },
+        });
       };
-    }
 
-    runRes.done.then(() => {
-      if (!finished) wipe();
-    });
+      let runRes: { done: Promise<void>; cleanup: () => void };
+      try {
+        runRes = selectVariation(ctx).run(ctx);
+      } catch (e) {
+        console.warn("[intro] variation failed:", e);
+        setGone(true);
+        return;
+      }
+      cleanupVar = runRes.cleanup;
+      // ?introhold freezes the intro (no auto-wipe / skip / safety) for inspection.
+      let hold = false;
+      try {
+        hold = new URLSearchParams(location.search).has("introhold");
+      } catch {}
+      if (hold) {
+        teardown = () => {
+          try {
+            cleanupVar();
+          } catch {}
+        };
+        return;
+      }
 
-    const skip = () => wipe();
-    window.addEventListener("click", skip);
-    window.addEventListener("wheel", skip, { passive: true });
-    window.addEventListener("touchstart", skip, { passive: true });
-    window.addEventListener("keydown", skip);
-    const safety = window.setTimeout(wipe, 6000);
+      runRes.done.then(() => {
+        if (!finished) wipe();
+      });
+
+      const skip = () => wipe();
+      window.addEventListener("click", skip);
+      window.addEventListener("wheel", skip, { passive: true });
+      window.addEventListener("touchstart", skip, { passive: true });
+      window.addEventListener("keydown", skip);
+      const safety = window.setTimeout(wipe, 6000);
+
+      teardown = () => {
+        try {
+          cleanupVar();
+        } catch {}
+        window.removeEventListener("click", skip);
+        window.removeEventListener("wheel", skip);
+        window.removeEventListener("touchstart", skip);
+        window.removeEventListener("keydown", skip);
+        window.clearTimeout(safety);
+      };
+    })();
 
     return () => {
-      try {
-        cleanupVar();
-      } catch {}
-      window.removeEventListener("click", skip);
-      window.removeEventListener("wheel", skip);
-      window.removeEventListener("touchstart", skip);
-      window.removeEventListener("keydown", skip);
-      window.clearTimeout(safety);
+      cancelled = true;
+      window.clearTimeout(chunkSafety);
+      teardown();
     };
   }, []);
 
