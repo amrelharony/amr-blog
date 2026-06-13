@@ -53,6 +53,10 @@ export default function WritePage() {
   // Skip the first autosave write after a load so it can't clobber an existing
   // draft before the author decides whether to restore it.
   const skipPersist = useRef(true);
+  // Monotonic guard so a slow startEdit fetch can't apply after a newer
+  // startEdit/startNew (rapid clicks on different list items would otherwise
+  // pair one article's form with another's restore banner).
+  const editSeq = useRef(0);
 
   const loadList = useCallback(async () => {
     const { data } = await sb
@@ -84,6 +88,7 @@ export default function WritePage() {
   };
 
   const startNew = () => {
+    editSeq.current++; // supersede any in-flight startEdit
     skipPersist.current = true;
     setForm({ ...EMPTY });
     setSlugLocked(false);
@@ -95,8 +100,10 @@ export default function WritePage() {
   };
 
   const startEdit = async (id: string) => {
+    const seq = ++editSeq.current;
     const { data } = await sb.from("longform_articles").select("*").eq("id", id).single();
-    if (!data) return;
+    // Bail if a newer startEdit/startNew has since taken over.
+    if (seq !== editSeq.current || !data) return;
     skipPersist.current = true;
     setForm({
       id: data.id,
