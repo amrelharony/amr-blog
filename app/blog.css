@@ -4270,6 +4270,32 @@ body:has(.challenge-hud.show) .lb-reading-panel {
   padding: 4px 10px 8px
 }
 
+/* ── Feed load-more (echoes .blog-load-more in thoughts.css) ── */
+.lb-load-more {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 14px;
+  margin-top: 18px;
+  background: none;
+  border: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--accent);
+  cursor: pointer;
+  transition: opacity .2s
+}
+
+.lb-load-more:hover {
+  opacity: .7
+}
+
+.lb-load-more:disabled {
+  opacity: .5;
+  cursor: default
+}
+
 /* ── Command palette (⌘K) — above the chat panel (9990), below the custom cursor (9998) ── */
 .cp-overlay {
   position: fixed;

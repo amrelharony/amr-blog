@@ -106,16 +106,26 @@ export default function FeedSearch() {
     return () => clearTimeout(t);
   }, [q, fallback]);
 
-  // Hide the static grid while server results are shown; tell FeedLoadMore.
+  // Hide the static grid while server results are shown.
   useEffect(() => {
     const grid = document.querySelector<HTMLElement>("#lbGrid");
     if (!grid) return;
     grid.style.display = active ? "none" : "";
-    window.dispatchEvent(new CustomEvent("feed:searching", { detail: { active } }));
     return () => {
       grid.style.display = "";
     };
   }, [active]);
+
+  // Tell FeedLoadMore a search is underway — in either mode. (In server mode
+  // the hidden grid hides the button anyway; in fallback mode the grid stays
+  // visible, so the button hides itself on this event.)
+  const querying = q.trim().length >= MIN_QUERY;
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("feed:searching", { detail: { active: querying } }));
+    return () => {
+      window.dispatchEvent(new CustomEvent("feed:searching", { detail: { active: false } }));
+    };
+  }, [querying]);
 
   // Degraded path: the original in-place DOM filter. Items are re-collected
   // on every keystroke so cards appended by FeedLoadMore are covered too.

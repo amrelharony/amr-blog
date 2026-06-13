@@ -5,15 +5,15 @@ import type { Article, ArticleCard } from "@/lib/types";
 const CARD_COLUMNS =
   "id,title,slug,excerpt,created_at,tags,views,reactions,cover_image,series_name";
 
-/** Published articles for the feed, newest first. */
-export async function getFeedArticles(limit = 50): Promise<ArticleCard[]> {
+/** Published articles for the feed, newest first (range-paged for load-more). */
+export async function getFeedArticles(limit = 50, offset = 0): Promise<ArticleCard[]> {
   const sb = createPublicClient();
   const { data, error } = await sb
     .from("longform_articles")
     .select(CARD_COLUMNS)
     .eq("published", true)
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
   if (error) throw error;
   return (data ?? []) as ArticleCard[];
 }
