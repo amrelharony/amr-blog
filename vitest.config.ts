@@ -8,7 +8,9 @@ export default defineConfig({
     alias: { "@": path.resolve(__dirname) },
   },
   test: {
+    // node by default; component tests opt into jsdom via a per-file
+    // `// @vitest-environment jsdom` pragma.
     environment: "node",
-    include: ["lib/**/*.test.ts"],
+    include: ["lib/**/*.test.ts", "components/**/*.test.tsx"],
   },
 });
