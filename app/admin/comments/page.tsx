@@ -35,7 +35,7 @@ const C_SORT = [
 export default function AdminComments() {
   const sb = getBrowserClient();
   const [rows, setRows] = useState<CommentRow[]>([]);
-  const [titles, setTitles] = useState<Record<string, string>>({});
+  const [titles, setTitles] = useState<Record<string, { title: string; slug: string }>>({});
   const [query, setQuery] = useState("");
   const [statusF, setStatusF] = useState("all");
   const [sortF, setSortF] = useState("newest");
@@ -51,9 +51,9 @@ export default function AdminComments() {
     setRows(list);
     const ids = [...new Set(list.map((c) => c.article_id))];
     if (ids.length) {
-      const { data: arts } = await sb.from("longform_articles").select("id,title").in("id", ids);
-      const map: Record<string, string> = {};
-      (arts || []).forEach((a: { id: string; title: string }) => (map[a.id] = a.title));
+      const { data: arts } = await sb.from("longform_articles").select("id,title,slug").in("id", ids);
+      const map: Record<string, { title: string; slug: string }> = {};
+      (arts || []).forEach((a: { id: string; title: string; slug: string }) => (map[a.id] = { title: a.title, slug: a.slug }));
       setTitles(map);
     }
   }, [sb]);
@@ -76,7 +76,7 @@ export default function AdminComments() {
 
   const visible = filterSort(rows, {
     query,
-    fields: (c) => [c.content, c.author_name, titles[c.article_id] || ""],
+    fields: (c) => [c.content, c.author_name, titles[c.article_id]?.title || ""],
     status: statusF,
     statusOf: (c) => (c.parent_id ? "reply" : "top"),
     sort: sortF,
@@ -152,9 +152,13 @@ export default function AdminComments() {
               <div style={{ fontSize: 11, color: "var(--sub)" }}>
                 <strong>{c.author_name}</strong> · {relTime(c.created_at)} · ❤ {c.likes || 0}
                 {c.parent_id ? " · reply" : ""} ·{" "}
-                <a href={`/p/${""}`} onClick={(e) => e.preventDefault()} title={c.article_id}>
-                  {titles[c.article_id] || "article"}
-                </a>
+                {titles[c.article_id]?.slug ? (
+                  <a href={`/p/${titles[c.article_id].slug}`} target="_blank" rel="noopener" title="Open article in a new tab">
+                    {titles[c.article_id].title}
+                  </a>
+                ) : (
+                  <span title={c.article_id}>{titles[c.article_id]?.title || "article"}</span>
+                )}
               </div>
             </div>
             <button className="adm-btn danger" onClick={() => del(c.id)}>
