@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import { haptic } from "@/lib/haptics";
 import { type ThemeMode, THEME_ICONS, THEME_LABELS, applyMode, getMode } from "@/lib/theme";
@@ -34,6 +34,8 @@ export const ADMIN_PALETTE_EVENT = "admin:palette";
 
 export default function AdminCommandPalette() {
   const router = useRouter();
+  // Hidden on the login page (mirrors AdminNav) — don't expose admin commands pre-auth.
+  const onLogin = usePathname() === "/admin/login";
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [mode, setModeState] = useState<ThemeMode>("auto");
@@ -62,8 +64,9 @@ export default function AdminCommandPalette() {
     }
   }, [open, close]);
 
-  // ⌘K / Ctrl+K + the click-trigger event.
+  // ⌘K / Ctrl+K + the click-trigger event (disabled on the login page).
   useEffect(() => {
+    if (onLogin) return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
@@ -76,7 +79,7 @@ export default function AdminCommandPalette() {
       document.removeEventListener("keydown", onKey);
       window.removeEventListener(ADMIN_PALETTE_EVENT, toggle);
     };
-  }, [toggle]);
+  }, [toggle, onLogin]);
 
   useEffect(() => {
     if (!open) return;
@@ -201,7 +204,7 @@ export default function AdminCommandPalette() {
     }
   };
 
-  if (!open) return null;
+  if (onLogin || !open) return null;
 
   return createPortal(
     <div className="cp-overlay" onClick={close}>
