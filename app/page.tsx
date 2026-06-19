@@ -107,12 +107,6 @@ export default async function FeedPage() {
                 href={`/p/${hero.slug}`}
                 aria-label={hero.title}
               >
-                <div className="lb-hero-fallback">
-                  <span className="lb-hero-fallback-icon">
-                    <i className="fa-solid fa-newspaper" />
-                  </span>
-                </div>
-                <div className="lb-hero-gradient" />
                 <div className="lb-hero-body">
                   <div className="lb-hero-date">
                     {isTrending(hero) && (
