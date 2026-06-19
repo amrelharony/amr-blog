@@ -5817,6 +5817,135 @@ body:has(.challenge-hud.show) .lb-reading-panel {
   background: rgba(0, 102, 255, .08)
 }
 
+/* ── Category filters (prominent, above tag chips) ── */
+.lb-cat-filters {
+  display: flex;
+  gap: 10px;
+  margin: 0 0 22px;
+  flex-wrap: wrap
+}
+
+.lb-cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  color: var(--text, #e8edf4);
+  background: rgba(0, 225, 255, .05);
+  border: 1px solid rgba(0, 225, 255, .25);
+  border-radius: 22px;
+  padding: 9px 18px;
+  transition: all .25s;
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px)
+}
+
+.lb-cat-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(0, 225, 255, .12);
+  box-shadow: 0 0 16px rgba(0, 225, 255, .15);
+  transform: translateY(-1px)
+}
+
+.lb-cat-chip.active {
+  border-color: var(--accent);
+  color: #06080f;
+  background: var(--accent, #00e1ff);
+  box-shadow: 0 0 18px rgba(0, 225, 255, .25)
+}
+
+.light-mode .lb-cat-chip {
+  color: #1e293b;
+  background: rgba(0, 102, 255, .05);
+  border-color: rgba(0, 102, 255, .25)
+}
+
+.light-mode .lb-cat-chip:hover {
+  border-color: #0066ff;
+  color: #0066ff;
+  background: rgba(0, 102, 255, .1)
+}
+
+.light-mode .lb-cat-chip.active {
+  color: #fff;
+  background: #0066ff;
+  border-color: #0066ff
+}
+
+.lb-cat-blurb {
+  color: var(--sub);
+  font-size: 15px;
+  line-height: 1.6;
+  max-width: 640px;
+  margin: 10px auto 0
+}
+
+/* ── Category archive pagination ── */
+.lb-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  margin: 40px 0 8px
+}
+
+.lb-pager-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text, #e8edf4);
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 22px;
+  padding: 9px 20px;
+  transition: all .25s
+}
+
+.lb-pager-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent)
+}
+
+.lb-pager-btn.disabled {
+  opacity: .35;
+  pointer-events: none
+}
+
+.lb-pager-info {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--sub)
+}
+
+/* ── "Originally published on LinkedIn" source note ── */
+.lb-source-note {
+  margin: 36px 0 0;
+  font-size: 14px;
+  color: var(--sub);
+  font-style: italic
+}
+
+.lb-source-note a {
+  color: var(--accent);
+  text-decoration: none;
+  font-style: normal;
+  border-bottom: 1px dotted currentColor
+}
+
+.lb-source-note a:hover {
+  opacity: .8
+}
+
 /* â”€â”€ Route transition overlay â”€â”€ */
 .lb-transition {
   position: fixed;

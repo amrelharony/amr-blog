@@ -7,6 +7,7 @@ import { highlight } from "@/lib/highlight";
 import { type ThemeMode, THEME_ICONS, THEME_LABELS, applyMode, getMode } from "@/lib/theme";
 import { queryTerms } from "@/lib/search";
 import { MIN_SEARCH_QUERY, useSearch } from "@/lib/use-search";
+import { CATEGORIES } from "@/lib/categories";
 
 // ⌘K / Ctrl+K command palette: quick navigation, theme switching, and
 // full-text search (same /api/search endpoint as FeedSearch). Zero-dep,
@@ -105,8 +106,17 @@ export default function CommandPalette() {
     ];
     const commands = allCommands.filter((c) => !ql || c.label.toLowerCase().includes(ql));
 
+    const categoryItems: Item[] = CATEGORIES.map<Item>((c) => ({
+      id: `cat-${c.slug}`,
+      icon: c.icon,
+      label: c.label,
+      hint: c.blurb,
+      action: { kind: "push", href: `/category/${c.slug}` },
+    })).filter((c) => !ql || c.label.toLowerCase().includes(ql));
+
     const out: Section[] = [];
     if (commands.length) out.push({ label: "COMMANDS", items: commands });
+    if (categoryItems.length) out.push({ label: "CATEGORIES", items: categoryItems });
     if (res?.articles.length) {
       out.push({
         label: "ARTICLES",

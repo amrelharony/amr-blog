@@ -43,3 +43,8 @@ next-env.d.ts
 .vercel
 
 .devserver.log
+
+# migration intermediate data + agent scratch files (scripts/migrate/*.mjs are kept)
+/scripts/migrate/out/
+/scripts/migrate/tmp-*.js
+
