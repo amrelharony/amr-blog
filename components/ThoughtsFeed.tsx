@@ -16,7 +16,6 @@ const FILTERS = [
   { key: "all", label: "All" },
   { key: "bookmarked", label: "🔖" },
   { key: "pinned", label: "📌" },
-  { key: "media", label: "🖼️" },
   { key: "polls", label: "📊" },
 ];
 const PAGE_SIZE = 15;
@@ -50,7 +49,6 @@ export default function ThoughtsFeed({ initial }: { initial: Thought[] }) {
   const [myRx, setMyRx] = useState<Record<string, string[]>>({});
   const [bookmarks, setBookmarks] = useState<string[]>([]);
   const [voted, setVoted] = useState<Record<string, number>>({});
-  const [lightbox, setLightbox] = useState<string | null>(null);
 
   useEffect(() => {
     setMyRx(lsGet("_blog_reactions", {}));
@@ -158,7 +156,6 @@ export default function ThoughtsFeed({ initial }: { initial: Thought[] }) {
   let list = posts;
   if (filter === "bookmarked") list = list.filter((p) => bookmarks.includes(p.id));
   else if (filter === "pinned") list = list.filter((p) => p.pinned);
-  else if (filter === "media") list = list.filter((p) => p.image_url);
   else if (filter === "polls") list = list.filter((p) => p.poll);
   if (q) list = list.filter((p) => (p.content || "").toLowerCase().includes(q));
   list = [...list].sort((a, b) => (a.pinned === b.pinned ? 0 : a.pinned ? -1 : 1));
@@ -214,7 +211,6 @@ export default function ThoughtsFeed({ initial }: { initial: Thought[] }) {
               onBookmark={toggleBookmark}
               onView={trackView}
               onTag={setQuery}
-              onImage={setLightbox}
             />
           ))
         )}
@@ -224,13 +220,6 @@ export default function ThoughtsFeed({ initial }: { initial: Thought[] }) {
           </div>
         )}
       </div>
-
-      {lightbox && (
-        <div className="blog-lightbox show" onClick={() => setLightbox(null)}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightbox} alt="Full size" />
-        </div>
-      )}
     </>
   );
 }
@@ -245,7 +234,6 @@ function PostCard({
   onBookmark,
   onView,
   onTag,
-  onImage,
 }: {
   post: Thought;
   myRx: string[];
@@ -256,7 +244,6 @@ function PostCard({
   onBookmark: (pid: string) => void;
   onView: (pid: string) => void;
   onTag: (tag: string) => void;
-  onImage: (src: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -328,17 +315,6 @@ function PostCard({
           if (t.classList.contains("hashtag")) onTag("#" + (t.dataset.tag || ""));
         }}
       />
-
-      {post.image_url && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          className="blog-post-img"
-          src={post.image_url}
-          alt="Post image"
-          loading="lazy"
-          onClick={() => onImage(post.image_url!)}
-        />
-      )}
 
       {poll && (
         <div className="blog-poll">

@@ -7,7 +7,6 @@ import {
   postProcessHtml,
   processEmbeds,
   processFootnotes,
-  processGalleries,
 } from "@/lib/markdown/postprocess";
 import { sanitizeHtml } from "@/lib/markdown/sanitize";
 
@@ -19,8 +18,9 @@ function parseMarkdown(md: string | null | undefined): string {
   return processEmbeds(postProcessHtml(raw));
 }
 
-/** Full article body pipeline → sanitized, embed-ready HTML string. */
+/** Full article body pipeline → sanitized, embed-ready HTML string. Images are
+ *  stripped by the sanitizer (text-only blog), so no gallery step is needed. */
 export function renderArticleHtml(md: string | null | undefined): string {
-  const html = processFootnotes(processGalleries(parseMarkdown(md)));
+  const html = processFootnotes(parseMarkdown(md));
   return sanitizeHtml(html);
 }

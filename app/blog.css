@@ -6736,6 +6736,20 @@ body[data-mood]:not([data-mood="neutral"]) .lb-cover-img {
   box-shadow: 0 0 16px var(--glowS, rgba(0, 225, 255, .15))
 }
 
+/* Text monogram replacement for the author photo (text-only blog). */
+.lb-author-monogram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 225, 255, .08);
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: 1px;
+  user-select: none
+}
+
 .lb-author-info {
   flex: 1;
   min-width: 0

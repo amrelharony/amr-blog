@@ -89,7 +89,6 @@ export default async function ArticlePage({ params }: Params) {
     inLanguage: "en",
     wordCount: words,
     ...(a.tldr ? { abstract: a.tldr } : {}),
-    ...(a.cover_image ? { image: a.cover_image } : {}),
     author: {
       "@type": "Person",
       name: "Amr Elharony",
@@ -103,7 +102,7 @@ export default async function ArticlePage({ params }: Params) {
     publisher: {
       "@type": "Organization",
       name: "Amr Elharony",
-      logo: { "@type": "ImageObject", url: `${siteUrl}/profile.jpg` },
+      logo: { "@type": "ImageObject", url: `${siteUrl}/icon.png` },
     },
     mainEntityOfPage: url,
     ...(a.tags?.length ? { keywords: a.tags.join(", ") } : {}),
@@ -190,17 +189,6 @@ export default async function ArticlePage({ params }: Params) {
               </div>
               <p className="lb-tldr-body">{a.tldr}</p>
             </aside>
-          )}
-
-          {a.cover_image && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              className="lb-cover-img lb-reveal"
-              src={a.cover_image}
-              alt={a.title}
-              itemProp="image"
-              fetchPriority="high"
-            />
           )}
 
           {showSeries && (
@@ -329,8 +317,9 @@ export default async function ArticlePage({ params }: Params) {
           </footer>
 
           <div className="lb-author-card lb-reveal">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="lb-author-avatar" src="/profile.jpg" alt="Amr Elharony" loading="lazy" />
+            <div className="lb-author-avatar lb-author-monogram" aria-hidden="true">
+              AE
+            </div>
             <div className="lb-author-info">
               <div className="lb-author-name">Amr Elharony</div>
               <div className="lb-author-bio">

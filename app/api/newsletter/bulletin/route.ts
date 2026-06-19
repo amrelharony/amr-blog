@@ -141,14 +141,9 @@ function bulletinHTML(articles: Article[], unsubUrl: string) {
             `<span style="display:inline-block;padding:3px 10px;background:rgba(0,225,255,0.06);color:#00e1ff;border-radius:20px;font-size:10px;font-family:${mono};margin-right:6px;border:1px solid rgba(0,225,255,0.1)">${esc(t)}</span>`,
         )
         .join("");
-      const cover = a.cover_image && /^https?:\/\//i.test(a.cover_image) ? a.cover_image : "";
-      const coverBlock = cover
-        ? `<tr><td style="padding:0;line-height:0"><img src="${cover}" alt="" width="558" style="width:100%;max-height:200px;object-fit:cover;display:block"/></td></tr>`
-        : "";
       const link = `${SITE}/p/${encodeURIComponent(a.slug)}`;
       return `<tr><td style="padding:0 0 24px">
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#0c1018;border-radius:15px;overflow:hidden;border:1px solid rgba(0,225,255,0.15)">
-          ${coverBlock}
           <tr><td style="padding:24px 28px">
             <div style="font-size:11px;color:#64748b;font-family:${mono};letter-spacing:0.5px;padding-bottom:12px">◆ ${date}</div>
             <h2 style="margin:0 0 10px;line-height:1.4"><a href="${link}" style="color:#f0f2f5;font-size:18px;font-weight:700;text-decoration:none;font-family:${sans}">${esc(a.title)}</a></h2>
