@@ -10,6 +10,10 @@ export interface Article {
   content: string;
   cover_image: string;
   tags: string[];
+  /** Top-level category: "Leadership" | "Business" | "Tech" (see lib/categories). */
+  category: string | null;
+  /** Original URL when republished from elsewhere (e.g. LinkedIn) — used for attribution. */
+  source_url: string | null;
   published: boolean;
   views: number;
   reactions: Record<string, number>;
@@ -34,7 +38,10 @@ export type ArticleCard = Pick<
   | "reactions"
   | "cover_image"
   | "series_name"
->;
+> & {
+  // Optional so existing card fixtures/queries that predate the column still type-check.
+  category?: string | null;
+};
 
 export interface Thought {
   id: string;

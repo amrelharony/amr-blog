@@ -4,7 +4,7 @@ import { sanitizeSearchQuery } from "@/lib/search";
 import type { Article, ArticleCard } from "@/lib/types";
 
 const CARD_COLUMNS =
-  "id,title,slug,excerpt,created_at,tags,views,reactions,cover_image,series_name";
+  "id,title,slug,excerpt,created_at,tags,views,reactions,cover_image,series_name,category";
 
 /** Published articles for the feed, newest first (range-paged for load-more). */
 export async function getFeedArticles(limit = 50, offset = 0): Promise<ArticleCard[]> {
@@ -32,15 +32,49 @@ export async function getArticleBySlug(slug: string): Promise<Article | null> {
   return (data as Article) ?? null;
 }
 
-/** All published slugs — for generateStaticParams. */
+// PostgREST caps a single response at ~1000 rows, so anything that must cover the
+// whole table (generateStaticParams, the sitemap) has to page explicitly.
+const PG_PAGE = 1000;
+
+/** All published slugs — for generateStaticParams. Paged past the 1000-row cap. */
 export async function getAllPublishedSlugs(): Promise<string[]> {
   const sb = createPublicClient();
-  const { data, error } = await sb
-    .from("longform_articles")
-    .select("slug")
-    .eq("published", true);
-  if (error) throw error;
-  return (data ?? []).map((r: { slug: string }) => r.slug);
+  const out: string[] = [];
+  for (let from = 0; from < 200000; from += PG_PAGE) {
+    const { data, error } = await sb
+      .from("longform_articles")
+      .select("slug")
+      .eq("published", true)
+      .order("id", { ascending: true })
+      .range(from, from + PG_PAGE - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as { slug: string }[];
+    out.push(...rows.map((r) => r.slug));
+    if (rows.length < PG_PAGE) break;
+  }
+  return out;
+}
+
+/** Every published article's sitemap fields (slug/date/cover), paged past the cap. */
+export async function getAllPublishedForSitemap(): Promise<
+  Pick<ArticleCard, "slug" | "created_at" | "cover_image">[]
+> {
+  const sb = createPublicClient();
+  const out: Pick<ArticleCard, "slug" | "created_at" | "cover_image">[] = [];
+  for (let from = 0; from < 200000; from += PG_PAGE) {
+    const { data, error } = await sb
+      .from("longform_articles")
+      .select("slug,created_at,cover_image")
+      .eq("published", true)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + PG_PAGE - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as Pick<ArticleCard, "slug" | "created_at" | "cover_image">[];
+    out.push(...rows);
+    if (rows.length < PG_PAGE) break;
+  }
+  return out;
 }
 
 /**
@@ -85,6 +119,36 @@ export async function searchArticles(q: string, limit = 12): Promise<SearchableA
     .limit(limit);
   if (error) throw error;
   return (data ?? []) as SearchableArticle[];
+}
+
+/** Published articles in a category, newest first — range-paged for archives. */
+export async function getArticlesByCategory(
+  category: string,
+  limit = 24,
+  offset = 0,
+): Promise<ArticleCard[]> {
+  const sb = createPublicClient();
+  const { data, error } = await sb
+    .from("longform_articles")
+    .select(CARD_COLUMNS)
+    .eq("published", true)
+    .eq("category", category)
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (error) throw error;
+  return (data ?? []) as ArticleCard[];
+}
+
+/** Exact count of published articles in a category (for pagination + JSON-LD). */
+export async function getCategoryCount(category: string): Promise<number> {
+  const sb = createPublicClient();
+  const { count, error } = await sb
+    .from("longform_articles")
+    .select("id", { count: "exact", head: true })
+    .eq("published", true)
+    .eq("category", category);
+  if (error) throw error;
+  return count ?? 0;
 }
 
 /** Published articles carrying a given tag, newest first. */

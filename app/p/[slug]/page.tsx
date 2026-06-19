@@ -235,6 +235,16 @@ export default async function ArticlePage({ params }: Params) {
             dangerouslySetInnerHTML={{ __html: html }}
           />
 
+          {a.source_url && (
+            <p className="lb-source-note lb-reveal">
+              Originally published on{" "}
+              <a href={a.source_url} target="_blank" rel="noopener nofollow">
+                LinkedIn <i className="fa-solid fa-arrow-up-right-from-square" aria-hidden="true" />
+              </a>
+              .
+            </p>
+          )}
+
           {(a.tags || []).length > 0 && (
             <div className="lb-article-tags lb-reveal">
               {a.tags.map((t) => (

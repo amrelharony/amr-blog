@@ -3,6 +3,7 @@ import { getFeedArticles } from "@/lib/queries/articles";
 import { fmtDate } from "@/lib/format";
 import { isTrending } from "@/lib/ranking";
 import { FEED_PAGE_SIZE } from "@/lib/constants";
+import { CATEGORIES } from "@/lib/categories";
 import type { ArticleCard } from "@/lib/types";
 import ArticleCardV2 from "@/components/ArticleCardV2";
 import FeedAnimations from "@/components/FeedAnimations";
@@ -53,6 +54,14 @@ export default async function FeedPage() {
         <p className="lb-feed-sub">DEEP DIVES ON AGILE, FINTECH, AND DIGITAL TRANSFORMATION</p>
         <div className="lb-feed-line" aria-hidden="true" />
       </header>
+
+      <nav className="lb-cat-filters lb-reveal" aria-label="Browse by category">
+        {CATEGORIES.map((c) => (
+          <Link key={c.slug} className="lb-cat-chip" href={`/category/${c.slug}`}>
+            <i className={`fa-solid ${c.icon}`} aria-hidden="true" /> {c.label}
+          </Link>
+        ))}
+      </nav>
 
       <div className="lb-search-wrap lb-reveal" style={{ transitionDelay: ".1s" }}>
         <i className="fa-solid fa-magnifying-glass lb-search-icon" aria-hidden="true" />
