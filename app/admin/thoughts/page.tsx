@@ -10,7 +10,6 @@ export default function AdminThoughts() {
   const sb = getBrowserClient();
   const [list, setList] = useState<Thought[]>([]);
   const [content, setContent] = useState("");
-  const [file, setFile] = useState<File | null>(null);
   const [scheduled, setScheduled] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ t: string; ok: boolean } | null>(null);
@@ -41,22 +40,14 @@ export default function AdminThoughts() {
   };
 
   const post = async (mode: "publish" | "draft" | "schedule") => {
-    if (!content.trim() && !file) {
-      setMsg({ t: "Write something or attach an image.", ok: false });
+    if (!content.trim()) {
+      setMsg({ t: "Write something.", ok: false });
       return;
     }
     setBusy(true);
     setMsg(null);
     try {
-      let image_url: string | null = null;
-      if (file) {
-        const fn = `mb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${file.name.split(".").pop()}`;
-        const { data, error } = await sb.storage.from("microblog-images").upload(fn, file, { upsert: false });
-        if (error) throw error;
-        image_url = sb.storage.from("microblog-images").getPublicUrl(data.path).data.publicUrl;
-      }
       const row: Record<string, unknown> = { content: content.trim(), published: mode === "publish", linkedin_posted: true };
-      if (image_url) row.image_url = image_url;
       // [poll:Question?|Option 1|Option 2]
       const pollMatch = content.match(/\[poll:(.+?)\|(.+?)\]/);
       if (pollMatch) {
@@ -78,7 +69,6 @@ export default function AdminThoughts() {
       const { error } = await sb.from("microblog").insert(row);
       if (error) throw error;
       setContent("");
-      setFile(null);
       setScheduled("");
       setMsg({ t: "Posted.", ok: true });
       await revalidate();
@@ -121,11 +111,6 @@ export default function AdminThoughts() {
             placeholder="What's on your mind?"
           />
         </div>
-        <div className="adm-field">
-          <label className="adm-label">Image (optional)</label>
-          <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-          {file && <span style={{ fontSize: 12, marginLeft: 8 }}>{file.name}</span>}
-        </div>
         <div className="adm-actions">
           <button className="adm-btn primary" disabled={busy} onClick={() => post("publish")}>
             Post
@@ -152,7 +137,7 @@ export default function AdminThoughts() {
         {list.map((t) => (
           <div key={t.id} className="adm-list-item">
             <span className="adm-list-title" style={{ fontWeight: 400, fontSize: 13 }}>
-              {(t.content || "(image only)").slice(0, 90)}
+              {(t.content || "").slice(0, 90)}
             </span>
             <span className="adm-pill">{relTime(t.created_at)}</span>
             {t.pinned && <span className="adm-pill sched">📌</span>}

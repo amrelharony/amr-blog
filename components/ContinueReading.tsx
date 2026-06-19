@@ -115,14 +115,9 @@ export default function ContinueReading() {
               window.location.href = `/p/${item.slug}`;
             }}
           >
-            {item.cover_image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img className="lb-continue-img" src={item.cover_image} alt={item.title || ""} loading="lazy" />
-            ) : (
-              <div className="lb-continue-fallback">
-                <i className="fa-solid fa-feather-pointed" />
-              </div>
-            )}
+            <div className="lb-continue-fallback">
+              <i className="fa-solid fa-feather-pointed" />
+            </div>
             <button
               className="lb-continue-close"
               title="Remove"

@@ -14,5 +14,7 @@ export function sanitizeHtml(html: string): string {
       "loading",
       "decoding",
     ],
+    // Text-only blog: strip any images (and their figure wrappers) from content.
+    FORBID_TAGS: ["img", "figure", "figcaption"],
   });
 }

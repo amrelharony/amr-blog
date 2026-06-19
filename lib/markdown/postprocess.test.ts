@@ -3,7 +3,6 @@ import {
   postProcessHtml,
   processEmbeds,
   processFootnotes,
-  processGalleries,
 } from "@/lib/markdown/postprocess";
 
 // Inputs mirror marked's actual blockquote/paragraph output shapes.
@@ -96,36 +95,3 @@ describe("processFootnotes", () => {
   });
 });
 
-describe("processGalleries", () => {
-  it("injects lazy loading on images that lack it, and only those", () => {
-    const out = processGalleries('<img src="a.png"><img loading="eager" src="b.png">');
-    expect(out).toContain('<img loading="lazy" decoding="async" src="a.png">');
-    expect(out).toContain('<img loading="eager" src="b.png">');
-  });
-
-  it("wraps a lone image paragraph in a figure with alt-derived caption", () => {
-    const out = processGalleries('<p><img loading="lazy" src="a.png" alt="A chart"></p>');
-    expect(out).toContain("<figure><img");
-    expect(out).toContain("<figcaption>A chart</figcaption>");
-  });
-
-  it("omits figcaption when alt is empty", () => {
-    const out = processGalleries('<p><img loading="lazy" src="a.png" alt=""></p>');
-    expect(out).toContain("<figure><img");
-    expect(out).not.toContain("<figcaption>");
-  });
-
-  it("groups two or more consecutive figures into a gallery without captions", () => {
-    const out = processGalleries(
-      '<p><img loading="lazy" src="a.png" alt="One"></p>\n<p><img loading="lazy" src="b.png" alt="Two"></p>',
-    );
-    expect(out).toContain('class="lb-gallery"');
-    expect(out).not.toContain("<figure>");
-    expect(out).not.toContain("<figcaption>");
-  });
-
-  it("keeps a single figure out of gallery markup", () => {
-    const out = processGalleries('<p><img loading="lazy" src="a.png" alt="One"></p>');
-    expect(out).not.toContain("lb-gallery");
-  });
-});

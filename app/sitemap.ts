@@ -16,7 +16,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lastModified: a.created_at ? new Date(a.created_at) : undefined,
     changeFrequency: "monthly",
     priority: 0.8,
-    images: a.cover_image ? [a.cover_image] : undefined,
   }));
 
   // Category hubs rank as section landing pages — higher priority than leaves.

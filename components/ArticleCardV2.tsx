@@ -15,14 +15,9 @@ export default function ArticleCardV2({ a, idx }: { a: ArticleCard; idx: number 
       href={`/p/${a.slug}`}
       aria-label={a.title}
     >
-      {a.cover_image ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img className="lb-card-v2-img" src={a.cover_image} alt={a.title} loading="lazy" />
-      ) : (
-        <div className="lb-card-v2-fallback">
-          <i className="fa-solid fa-feather-pointed" />
-        </div>
-      )}
+      <div className="lb-card-v2-fallback">
+        <i className="fa-solid fa-feather-pointed" />
+      </div>
       <div className="lb-card-v2-body">
         <div className="lb-card-v2-date">
           {fmtDate(a.created_at)}

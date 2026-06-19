@@ -20,7 +20,6 @@ const EMPTY = {
   slug: "",
   excerpt: "",
   content: "",
-  cover_image: "",
   tags: "",
   series_name: "",
   series_order: "0",
@@ -111,7 +110,6 @@ export default function WritePage() {
       slug: data.slug || "",
       excerpt: data.excerpt || "",
       content: data.content || "",
-      cover_image: data.cover_image || "",
       tags: (data.tags || []).join(", "),
       series_name: data.series_name || "",
       series_order: String(data.series_order ?? 0),
@@ -193,22 +191,6 @@ export default function WritePage() {
     }
   };
 
-  const uploadCover = async (file: File) => {
-    setBusy(true);
-    try {
-      const fn = `cover_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${file.name.split(".").pop()}`;
-      const { data, error } = await sb.storage.from("microblog-images").upload(fn, file, { upsert: false });
-      if (error) throw error;
-      const { data: pub } = sb.storage.from("microblog-images").getPublicUrl(data.path);
-      set("cover_image", pub.publicUrl);
-      setMsg({ t: "Cover uploaded.", ok: true });
-    } catch (e) {
-      setMsg({ t: "Upload failed: " + (e as Error).message, ok: false });
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const save = async (mode: "draft" | "publish" | "schedule") => {
     if (!form.title.trim()) {
       setMsg({ t: "Title is required.", ok: false });
@@ -222,7 +204,6 @@ export default function WritePage() {
       slug,
       excerpt: form.excerpt.trim(),
       content: form.content,
-      cover_image: form.cover_image.trim(),
       tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
       series_name: form.series_name.trim() || null,
       series_order: Number(form.series_order) || 0,
@@ -438,13 +419,6 @@ export default function WritePage() {
           <div className="adm-field" style={{ maxWidth: 140 }}>
             <label className="adm-label">Series order</label>
             <input className="adm-input" type="number" value={form.series_order} onChange={(e) => set("series_order", e.target.value)} />
-          </div>
-        </div>
-        <div className="adm-field">
-          <label className="adm-label">Cover image URL</label>
-          <input className="adm-input" value={form.cover_image} onChange={(e) => set("cover_image", e.target.value)} placeholder="https://… or upload below" />
-          <div style={{ marginTop: 6 }}>
-            <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && uploadCover(e.target.files[0])} />
           </div>
         </div>
         <div className="adm-field">

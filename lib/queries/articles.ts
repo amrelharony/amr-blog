@@ -55,22 +55,22 @@ export async function getAllPublishedSlugs(): Promise<string[]> {
   return out;
 }
 
-/** Every published article's sitemap fields (slug/date/cover), paged past the cap. */
+/** Every published article's sitemap fields (slug/date), paged past the cap. */
 export async function getAllPublishedForSitemap(): Promise<
-  Pick<ArticleCard, "slug" | "created_at" | "cover_image">[]
+  Pick<ArticleCard, "slug" | "created_at">[]
 > {
   const sb = createPublicClient();
-  const out: Pick<ArticleCard, "slug" | "created_at" | "cover_image">[] = [];
+  const out: Pick<ArticleCard, "slug" | "created_at">[] = [];
   for (let from = 0; from < 200000; from += PG_PAGE) {
     const { data, error } = await sb
       .from("longform_articles")
-      .select("slug,created_at,cover_image")
+      .select("slug,created_at")
       .eq("published", true)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .range(from, from + PG_PAGE - 1);
     if (error) throw error;
-    const rows = (data ?? []) as Pick<ArticleCard, "slug" | "created_at" | "cover_image">[];
+    const rows = (data ?? []) as Pick<ArticleCard, "slug" | "created_at">[];
     out.push(...rows);
     if (rows.length < PG_PAGE) break;
   }

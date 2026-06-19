@@ -107,22 +107,11 @@ export default async function FeedPage() {
                 href={`/p/${hero.slug}`}
                 aria-label={hero.title}
               >
-                {hero.cover_image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    className="lb-hero-img"
-                    src={hero.cover_image}
-                    alt={hero.title}
-                    loading="eager"
-                    fetchPriority="high"
-                  />
-                ) : (
-                  <div className="lb-hero-fallback">
-                    <span className="lb-hero-fallback-icon">
-                      <i className="fa-solid fa-newspaper" />
-                    </span>
-                  </div>
-                )}
+                <div className="lb-hero-fallback">
+                  <span className="lb-hero-fallback-icon">
+                    <i className="fa-solid fa-newspaper" />
+                  </span>
+                </div>
                 <div className="lb-hero-gradient" />
                 <div className="lb-hero-body">
                   <div className="lb-hero-date">

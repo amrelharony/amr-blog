@@ -58,10 +58,6 @@ export default async function ReviewPage({ params }: Params) {
             <span>{readingTime(r.article_content)}</span>
           </div>
         </header>
-        {r.article_cover_image && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img className="lb-cover-img" src={r.article_cover_image} alt={r.article_title} />
-        )}
         <div className="lb-content has-dropcap" dangerouslySetInnerHTML={{ __html: html }} />
       </article>
 
