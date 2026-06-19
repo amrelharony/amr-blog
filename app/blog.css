@@ -5405,61 +5405,27 @@ body:has(.challenge-hud.show) .lb-reading-panel {
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 /* â”€â”€ Magazine Feed: Hero â”€â”€ */
+/* Featured (latest) article — text-only block, no media box. */
 .lb-hero {
+  display: block;
   position: relative;
   border: 1px solid var(--border);
   border-radius: 16px;
   margin-bottom: 40px;
   cursor: pointer;
   overflow: hidden;
-  transition: border-color .3s;
-  -webkit-mask-image: -webkit-radial-gradient(white, black);
-  mask-image: radial-gradient(white, black)
+  background: linear-gradient(135deg, rgba(0, 225, 255, .06) 0%, rgba(255, 255, 255, .02) 100%);
+  transition: border-color .3s, box-shadow .3s
 }
 
 .lb-hero:hover {
-  border-color: var(--accent)
-}
-
-.lb-hero-img {
-  width: 100%;
-  aspect-ratio: 16/9;
-  object-fit: cover;
-  display: block;
-  transition: transform .4s ease
-}
-
-.lb-hero:hover .lb-hero-img {
-  transform: scale(1.02)
-}
-
-.lb-hero-gradient {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(0deg, rgba(6, 8, 16, .92) 0%, rgba(6, 8, 16, .4) 50%, transparent 100%)
-}
-
-.lb-hero-fallback {
-  width: 100%;
-  aspect-ratio: 16/9;
-  background: linear-gradient(135deg, rgba(0, 225, 255, .08) 0%, rgba(6, 8, 16, .9) 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center
-}
-
-.lb-hero-fallback-icon {
-  font-size: 48px;
-  color: var(--accent);
-  opacity: .3
+  border-color: var(--accent);
+  box-shadow: 0 8px 32px rgba(0, 225, 255, .07)
 }
 
 .lb-hero-body {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 32px
+  position: static;
+  padding: 34px 38px
 }
 
 .lb-hero-date {
@@ -5468,7 +5434,7 @@ body:has(.challenge-hud.show) .lb-reading-panel {
   color: var(--accent);
   text-transform: uppercase;
   letter-spacing: 1.5px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   display: flex;
   align-items: center;
   gap: 8px
@@ -5476,28 +5442,28 @@ body:has(.challenge-hud.show) .lb-reading-panel {
 
 .lb-hero-title {
   font-family: 'Inter', sans-serif;
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 800;
   color: #fff;
   line-height: 1.2;
   letter-spacing: -0.5px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden
 }
 
 .lb-hero-excerpt {
   font-family: 'Source Serif 4', Georgia, serif;
-  font-size: 14px;
-  color: rgba(255, 255, 255, .7);
-  line-height: 1.5;
+  font-size: 15px;
+  color: rgba(255, 255, 255, .72);
+  line-height: 1.6;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  margin-bottom: 12px
+  margin-bottom: 14px
 }
 
 .lb-hero-meta {
@@ -5517,16 +5483,13 @@ body:has(.challenge-hud.show) .lb-reading-panel {
 
 .light-mode .lb-hero {
   border-color: transparent;
+  background: #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, .08), 0 0 0 1px rgba(0, 0, 0, .04)
 }
 
 .light-mode .lb-hero:hover {
   border-color: transparent;
   box-shadow: 0 4px 16px rgba(0, 102, 255, .1), 0 0 0 1px rgba(0, 102, 255, .3)
-}
-
-.light-mode .lb-hero-gradient {
-  background: linear-gradient(0deg, rgba(244, 246, 251, .95) 0%, rgba(244, 246, 251, .5) 50%, transparent 100%)
 }
 
 .light-mode .lb-hero-title {
@@ -5543,10 +5506,6 @@ body:has(.challenge-hud.show) .lb-reading-panel {
 
 .light-mode .lb-hero-meta {
   color: #64748b
-}
-
-.light-mode .lb-hero-fallback {
-  background: linear-gradient(135deg, rgba(0, 102, 255, .06) 0%, rgba(244, 246, 251, .9) 100%)
 }
 
 /* â”€â”€ Magazine Feed: Card Grid â”€â”€ */
@@ -5566,33 +5525,13 @@ body:has(.challenge-hud.show) .lb-reading-panel {
   display: flex;
   flex-direction: column;
   position: relative;
-  -webkit-mask-image: -webkit-radial-gradient(white, black);
-  mask-image: radial-gradient(white, black)
+  background: rgba(255, 255, 255, .02)
 }
 
 .lb-card-v2:hover {
   border-color: var(--accent);
   transform: translateY(-2px);
   box-shadow: 0 8px 32px rgba(0, 225, 255, .06)
-}
-
-.lb-card-v2-img {
-  width: 100%;
-  aspect-ratio: 16/10;
-  object-fit: cover;
-  display: block
-}
-
-.lb-card-v2-fallback {
-  width: 100%;
-  aspect-ratio: 16/10;
-  background: linear-gradient(135deg, rgba(0, 225, 255, .04) 0%, rgba(0, 0, 0, .2) 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  color: var(--accent);
-  opacity: .2
 }
 
 .lb-card-v2-body {
@@ -5724,16 +5663,13 @@ body:has(.challenge-hud.show) .lb-reading-panel {
 
 .light-mode .lb-card-v2 {
   border-color: transparent;
+  background: #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, .08), 0 0 0 1px rgba(0, 0, 0, .04)
 }
 
 .light-mode .lb-card-v2:hover {
   border-color: transparent;
   box-shadow: 0 4px 16px rgba(0, 102, 255, .1), 0 0 0 1px rgba(0, 102, 255, .3)
-}
-
-.light-mode .lb-card-v2-fallback {
-  background: linear-gradient(135deg, rgba(0, 102, 255, .03) 0%, rgba(0, 0, 0, .02) 100%)
 }
 
 .light-mode .lb-card-v2-bookmark {
@@ -7709,26 +7645,8 @@ body[data-mood]:not([data-mood="neutral"]) .lb-cover-img {
   box-shadow: 0 8px 24px rgba(0, 0, 0, .2), 0 0 12px rgba(0, 225, 255, .06)
 }
 
-.lb-continue-img {
-  width: 100%;
-  aspect-ratio: 16/10;
-  object-fit: cover;
-  display: block
-}
-
-.lb-continue-fallback {
-  width: 100%;
-  aspect-ratio: 16/10;
-  background: linear-gradient(135deg, rgba(0, 225, 255, .08), rgba(0, 225, 255, .02));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  color: var(--sub)
-}
-
 .lb-continue-body {
-  padding: 10px
+  padding: 12px 12px 14px
 }
 
 .lb-continue-card-title {

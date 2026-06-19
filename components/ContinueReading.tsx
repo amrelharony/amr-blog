@@ -115,9 +115,6 @@ export default function ContinueReading() {
               window.location.href = `/p/${item.slug}`;
             }}
           >
-            <div className="lb-continue-fallback">
-              <i className="fa-solid fa-feather-pointed" />
-            </div>
             <button
               className="lb-continue-close"
               title="Remove"
