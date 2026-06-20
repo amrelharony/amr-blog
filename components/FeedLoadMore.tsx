@@ -5,11 +5,13 @@ import ArticleCardV2 from "./ArticleCardV2";
 import { dispatchFeedMore, onFeedSearching } from "@/lib/feed-events";
 import type { ArticleCard } from "@/lib/types";
 
-// "[ LOAD MORE ]" pagination for the feed (mirrors ThoughtsFeed.loadMore).
+// Infinite-scroll pagination for the feed (mirrors ThoughtsFeed.loadMore).
 // Fetches the next page from /api/feed and portals the new cards into the
-// existing server-rendered .lb-card-grid so the grid flows as one. Rendered
+// existing server-rendered .lb-card-grid so the grid flows as one. An
+// IntersectionObserver on the sentinel auto-loads as it nears the viewport;
+// the "[ LOAD MORE ]" button stays as a keyboard/no-observer fallback. Rendered
 // inside #lbGrid, so FeedSearch hiding the grid hides this too; the
-// feed:searching listener additionally hides the button during the degraded
+// feed:searching listener additionally hides the control during the degraded
 // DOM-filter search, where the grid stays visible.
 interface FeedPage {
   articles: ArticleCard[];
@@ -31,6 +33,10 @@ export default function FeedLoadMore({
   const [gridHost, setGridHost] = useState<HTMLElement | null>(null);
   // Every slug already rendered (server page + appends), for de-duping.
   const seen = useRef(new Set(initialSlugs));
+  // Infinite-scroll sentinel + a ref to the latest loadMore (so a stable
+  // observer always calls the current closure).
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const loadMoreRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     setGridHost(document.querySelector<HTMLElement>("#lbGrid .lb-card-grid"));
@@ -48,7 +54,7 @@ export default function FeedLoadMore({
   }, [extra.length]);
 
   const loadMore = async () => {
-    if (loading || !hasMore) return;
+    if (loading || !hasMore || searching) return;
     setLoading(true);
     try {
       const r = await fetch(`/api/feed?offset=${offset}`);
@@ -67,6 +73,28 @@ export default function FeedLoadMore({
       setLoading(false);
     }
   };
+  // Keep the ref pointing at the latest loadMore (refs can't be written during
+  // render), so the stable observer always invokes the current closure.
+  useEffect(() => {
+    loadMoreRef.current = loadMore;
+  });
+
+  // Auto-load as the sentinel nears the viewport. Re-created after each append
+  // (extra.length) and on hasMore/searching changes, so a sentinel that is
+  // still on screen keeps filling the page; loadMore self-guards against
+  // concurrent or exhausted loads and against the active search state.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore || searching) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) loadMoreRef.current();
+      },
+      { rootMargin: "800px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, searching, extra.length]);
 
   const cards = extra.map((a, i) => <ArticleCardV2 key={a.id} a={a} idx={i} />);
   return (
@@ -78,9 +106,11 @@ export default function FeedLoadMore({
           <div className="lb-card-grid">{cards}</div>
         ))}
       {hasMore && !searching && (
-        <button className="lb-load-more" onClick={loadMore} disabled={loading}>
-          {loading ? "[ LOADING… ]" : "[ LOAD MORE ]"}
-        </button>
+        <div ref={sentinelRef} className="lb-feed-sentinel">
+          <button className="lb-load-more" onClick={loadMore} disabled={loading}>
+            {loading ? "[ LOADING… ]" : "[ LOAD MORE ]"}
+          </button>
+        </div>
       )}
     </>
   );
