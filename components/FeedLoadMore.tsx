@@ -21,9 +21,12 @@ interface FeedPage {
 export default function FeedLoadMore({
   initialSlugs,
   hasMore: initialHasMore,
+  category,
 }: {
   initialSlugs: string[];
   hasMore: boolean;
+  /** When set, pages are filtered to this category (e.g. on /category/[slug]). */
+  category?: string;
 }) {
   const [extra, setExtra] = useState<ArticleCard[]>([]);
   const [offset, setOffset] = useState(initialSlugs.length);
@@ -57,7 +60,9 @@ export default function FeedLoadMore({
     if (loading || !hasMore || searching) return;
     setLoading(true);
     try {
-      const r = await fetch(`/api/feed?offset=${offset}`);
+      const r = await fetch(
+        `/api/feed?offset=${offset}${category ? `&category=${encodeURIComponent(category)}` : ""}`,
+      );
       if (!r.ok) throw new Error(`feed HTTP ${r.status}`);
       const data = (await r.json()) as FeedPage;
       // De-dupe by slug: offset paging over a newest-first, mutable list can
