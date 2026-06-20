@@ -6,15 +6,15 @@ import { CATEGORIES, categoryBySlug } from "@/lib/categories";
 import { CATEGORY_PAGE_SIZE } from "@/lib/constants";
 import ArticleCardV2 from "@/components/ArticleCardV2";
 import FeedAnimations from "@/components/FeedAnimations";
+import FeedLoadMore from "@/components/FeedLoadMore";
 
 export const revalidate = 300;
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://blog.amrelharony.com";
 
 type Params = { params: Promise<{ category: string }> };
-type Search = { searchParams: Promise<{ page?: string }> };
 
-// Prerender the three category hubs at build; ?page archives use ISR on first hit.
+// Prerender the three category hubs at build; the rest loads via infinite scroll.
 export function generateStaticParams() {
   return CATEGORIES.map((c) => ({ category: c.slug }));
 }
@@ -41,21 +41,16 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   };
 }
 
-export default async function CategoryPage({ params, searchParams }: Params & Search) {
+export default async function CategoryPage({ params }: Params) {
   const { category } = await params;
   const cat = categoryBySlug(category);
   if (!cat) notFound();
 
-  const sp = await searchParams;
-  const page = Math.max(1, parseInt(sp.page || "1", 10) || 1);
-  const offset = (page - 1) * CATEGORY_PAGE_SIZE;
-
   const [articles, total] = await Promise.all([
-    getArticlesByCategory(cat.label, CATEGORY_PAGE_SIZE, offset),
+    getArticlesByCategory(cat.label, CATEGORY_PAGE_SIZE, 0),
     getCategoryCount(cat.label),
   ]);
-  if (page > 1 && articles.length === 0) notFound();
-  const totalPages = Math.max(1, Math.ceil(total / CATEGORY_PAGE_SIZE));
+  const hasMore = total > articles.length;
 
   const collectionLd = {
     "@context": "https://schema.org",
@@ -69,7 +64,7 @@ export default async function CategoryPage({ params, searchParams }: Params & Se
       numberOfItems: total,
       itemListElement: articles.map((a, i) => ({
         "@type": "ListItem",
-        position: offset + i + 1,
+        position: i + 1,
         url: `${siteUrl}/p/${a.slug}`,
         name: a.title,
       })),
@@ -113,7 +108,6 @@ export default async function CategoryPage({ params, searchParams }: Params & Se
         </h1>
         <p className="lb-feed-sub">
           {total.toLocaleString()} {total === 1 ? "ARTICLE" : "ARTICLES"}
-          {totalPages > 1 ? ` · PAGE ${page} OF ${totalPages}` : ""}
         </p>
         <p className="lb-cat-blurb">{cat.blurb}</p>
         <div className="lb-feed-line" aria-hidden="true" />
@@ -138,39 +132,21 @@ export default async function CategoryPage({ params, searchParams }: Params & Se
             No articles in this category yet.
           </div>
         ) : (
-          <div className="lb-card-grid">
-            {articles.map((a, idx) => (
-              <ArticleCardV2 key={a.id} a={a} idx={idx} />
-            ))}
-          </div>
+          <>
+            <div className="lb-card-grid">
+              {articles.map((a, idx) => (
+                <ArticleCardV2 key={a.id} a={a} idx={idx} />
+              ))}
+            </div>
+            <FeedLoadMore
+              category={cat.label}
+              initialSlugs={articles.map((a) => a.slug)}
+              hasMore={hasMore}
+            />
+          </>
         )}
       </main>
 
-      {totalPages > 1 && (
-        <nav className="lb-pager" aria-label="Pagination">
-          {page > 1 ? (
-            <Link className="lb-pager-btn" href={`/category/${cat.slug}${page - 1 === 1 ? "" : `?page=${page - 1}`}`}>
-              <i className="fa-solid fa-chevron-left" /> Newer
-            </Link>
-          ) : (
-            <span className="lb-pager-btn disabled">
-              <i className="fa-solid fa-chevron-left" /> Newer
-            </span>
-          )}
-          <span className="lb-pager-info">
-            {page} / {totalPages}
-          </span>
-          {page < totalPages ? (
-            <Link className="lb-pager-btn" href={`/category/${cat.slug}?page=${page + 1}`}>
-              Older <i className="fa-solid fa-chevron-right" />
-            </Link>
-          ) : (
-            <span className="lb-pager-btn disabled">
-              Older <i className="fa-solid fa-chevron-right" />
-            </span>
-          )}
-        </nav>
-      )}
       <FeedAnimations />
     </div>
   );
