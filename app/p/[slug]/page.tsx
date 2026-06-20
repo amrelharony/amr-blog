@@ -35,7 +35,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!a) return { title: "Not found", robots: { index: false } };
   const description = a.excerpt || a.title;
   return {
-    title: a.title,
+    // `absolute` drops the layout's "· Amr Elharony" suffix so the keyword-rich
+    // article title isn't pushed past the ~60-char SERP width.
+    title: { absolute: a.title },
     description,
     authors: [{ name: "Amr Elharony", url: "https://amrelharony.com" }],
     ...(a.tags?.length ? { keywords: a.tags } : {}),
