@@ -114,15 +114,20 @@ export default async function CategoryPage({ params }: Params) {
       </header>
 
       <nav className="lb-cat-filters" aria-label="Categories">
-        {CATEGORIES.map((c) => (
-          <Link
-            key={c.slug}
-            className={"lb-cat-chip" + (c.slug === cat.slug ? " active" : "")}
-            href={`/category/${c.slug}`}
-          >
-            <i className={`fa-solid ${c.icon}`} aria-hidden="true" /> {c.label}
-          </Link>
-        ))}
+        {CATEGORIES.map((c) => {
+          const active = c.slug === cat.slug;
+          return (
+            <Link
+              key={c.slug}
+              // Clicking the active category again clears the filter (back to all).
+              className={"lb-cat-chip" + (active ? " active" : "")}
+              href={active ? "/" : `/category/${c.slug}`}
+              aria-pressed={active}
+            >
+              <i className={`fa-solid ${c.icon}`} aria-hidden="true" /> {c.label}
+            </Link>
+          );
+        })}
       </nav>
 
       <main id="lbGrid" role="feed" aria-label="Article list">

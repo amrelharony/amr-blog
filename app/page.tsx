@@ -1,7 +1,5 @@
 import Link from "next/link";
 import { getFeedArticles } from "@/lib/queries/articles";
-import { fmtDate } from "@/lib/format";
-import { isTrending } from "@/lib/ranking";
 import { FEED_PAGE_SIZE } from "@/lib/constants";
 import { CATEGORIES } from "@/lib/categories";
 import type { ArticleCard } from "@/lib/types";
@@ -32,8 +30,6 @@ export default async function FeedPage() {
   const rows = await getFeedArticles(FEED_PAGE_SIZE + 1);
   const hasMore = rows.length > FEED_PAGE_SIZE;
   const articles = hasMore ? rows.slice(0, FEED_PAGE_SIZE) : rows;
-  const hero = articles[0];
-  const rest = articles.slice(1);
   const tags = topTags(articles);
 
   return (
@@ -101,42 +97,11 @@ export default async function FeedPage() {
           </div>
         ) : (
           <>
-            {hero && (
-              <Link
-                className="lb-hero lb-reveal"
-                href={`/p/${hero.slug}`}
-                aria-label={hero.title}
-              >
-                <div className="lb-hero-body">
-                  <div className="lb-hero-date">
-                    {isTrending(hero) && (
-                      <span className="lb-trending-badge">
-                        <i className="fa-solid fa-fire" /> TRENDING
-                      </span>
-                    )}
-                    {fmtDate(hero.created_at)}
-                  </div>
-                  <div className="lb-hero-title">{hero.title}</div>
-                  <div className="lb-hero-excerpt">{(hero.excerpt || "").slice(0, 160)}</div>
-                  <div className="lb-hero-meta">
-                    <span>👁 {hero.views || 0} views</span>
-                    {hero.series_name && (
-                      <span className="lb-series-badge" style={{ opacity: 1 }}>
-                        {hero.series_name}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </Link>
-            )}
-
-            {rest.length > 0 && (
-              <div className="lb-card-grid">
-                {rest.map((a, idx) => (
-                  <ArticleCardV2 key={a.id} a={a} idx={idx} />
-                ))}
-              </div>
-            )}
+            <div className="lb-card-grid">
+              {articles.map((a, idx) => (
+                <ArticleCardV2 key={a.id} a={a} idx={idx} />
+              ))}
+            </div>
             <FeedLoadMore initialSlugs={articles.map((a) => a.slug)} hasMore={hasMore} />
           </>
         )}
