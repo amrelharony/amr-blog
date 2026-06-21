@@ -11,12 +11,15 @@ const ARTICLE_RX = [
   { key: "clap", emoji: "👏", label: "Bravo" },
   { key: "target", emoji: "🎯", label: "On Point" },
 ];
-const ADMIN_NAME = "Amr Elharony";
+// The AUTHOR badge is keyed on author_id (server-trusted), NOT the typed name —
+// otherwise any visitor could type "Amr Elharony" and impersonate the owner.
+const ADMIN_UUID = "82dd079f-de7b-477b-84eb-6d34d9eded05";
 
 interface Comment {
   id: string;
   parent_id: string | null;
   author_name: string;
+  author_id: string | null;
   content: string;
   created_at: string;
   likes: number;
@@ -55,8 +58,14 @@ function buildTree(comments: Comment[]): TreeComment[] {
   const roots: TreeComment[] = [];
   comments.forEach((c) => (map[c.id] = { ...c, replies: [] }));
   comments.forEach((c) => {
-    if (c.parent_id && map[c.parent_id]) map[c.parent_id].replies.push(map[c.id]);
-    else roots.push(map[c.id]);
+    if (c.parent_id) {
+      // Attach under the parent if it's visible; if the parent is hidden
+      // (moderated) or cross-article, DROP the orphan rather than promoting it
+      // to a top-level comment.
+      if (map[c.parent_id]) map[c.parent_id].replies.push(map[c.id]);
+    } else {
+      roots.push(map[c.id]);
+    }
   });
   return roots;
 }
@@ -79,6 +88,7 @@ export default function ArticleEngagement({
   const [name, setName] = useState("");
   const [text, setText] = useState("");
   const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
 
   // hydrate local state
   useEffect(() => {
@@ -103,6 +113,7 @@ export default function ArticleEngagement({
       .from("article_comments")
       .select("*")
       .eq("article_id", articleId)
+      .eq("status", "approved") // RLS enforces this for anon; explicit so admins see the public view too
       .order("created_at", { ascending: true });
     setComments((data || []) as Comment[]);
   }, [sb, articleId]);
@@ -139,19 +150,27 @@ export default function ArticleEngagement({
     }
   };
 
-  const postComment = async (content: string, parentId: string | null, author: string) => {
-    if (!content.trim()) return false;
+  // Returns null on success, or the error message to surface (rate limit, length,
+  // reserved name, etc.). Inserts go through the rate-limited RPC (direct INSERT
+  // is no longer allowed by RLS) which enforces ≤5 comments / 10 min per session.
+  const postComment = async (
+    content: string,
+    parentId: string | null,
+    author: string,
+  ): Promise<string | null> => {
+    if (!content.trim()) return "Comment cannot be empty.";
     await ensureAnonSession();
     localStorage.setItem("_lb_commenter", author);
     setName(author);
-    const { error } = await sb.from("article_comments").insert({
-      article_id: articleId,
-      parent_id: parentId,
-      author_name: author || "Anonymous",
-      content: content.trim(),
+    const { error } = await sb.rpc("post_article_comment", {
+      p_article_id: articleId,
+      p_parent_id: parentId,
+      p_author: author || "Anonymous",
+      p_content: content.trim(),
     });
-    if (!error) await loadComments();
-    return !error;
+    if (error) return error.message;
+    await loadComments();
+    return null;
   };
 
   const likeComment = async (cid: string) => {
@@ -232,6 +251,7 @@ export default function ArticleEngagement({
                 className="lb-comment-textarea"
                 placeholder="Share your thoughts..."
                 rows={3}
+                maxLength={4000}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
               />
@@ -241,13 +261,20 @@ export default function ArticleEngagement({
               disabled={posting || !text.trim()}
               onClick={async () => {
                 setPosting(true);
-                const ok = await postComment(text, null, name.trim() || "Anonymous");
-                if (ok) setText("");
+                setPostError(null);
+                const err = await postComment(text, null, name.trim() || "Anonymous");
+                if (err) setPostError(err);
+                else setText("");
                 setPosting(false);
               }}
             >
               {posting ? "Posting…" : "Post Comment"}
             </button>
+            {postError && (
+              <div className="lb-comment-error" role="alert" style={{ color: "#ef4444", fontSize: 12, marginTop: 8 }}>
+                {postError}
+              </div>
+            )}
           </div>
           {tree.length ? (
             <div className="lb-comment-list">
@@ -284,14 +311,15 @@ function CommentNode({
   depth: number;
   likedIds: string[];
   onLike: (id: string) => void;
-  onReply: (content: string, parentId: string | null, author: string) => Promise<boolean>;
+  onReply: (content: string, parentId: string | null, author: string) => Promise<string | null>;
   defaultName: string;
 }) {
   const [replyOpen, setReplyOpen] = useState(false);
   const [rName, setRName] = useState(defaultName);
   const [rText, setRText] = useState("");
   const [busy, setBusy] = useState(false);
-  const isAuthor = (c.author_name || "").toLowerCase() === ADMIN_NAME.toLowerCase();
+  const [replyError, setReplyError] = useState<string | null>(null);
+  const isAuthor = c.author_id === ADMIN_UUID;
   const isLiked = likedIds.includes(c.id);
 
   return (
@@ -329,9 +357,15 @@ function CommentNode({
           <textarea
             className="lb-comment-reply-input"
             placeholder="Write a reply..."
+            maxLength={4000}
             value={rText}
             onChange={(e) => setRText(e.target.value)}
           />
+          {replyError && (
+            <div role="alert" style={{ color: "#ef4444", fontSize: 12, margin: "4px 0" }}>
+              {replyError}
+            </div>
+          )}
           <div className="lb-comment-reply-actions">
             <button
               className="lb-cms-btn primary"
@@ -339,8 +373,10 @@ function CommentNode({
               disabled={busy || !rText.trim()}
               onClick={async () => {
                 setBusy(true);
-                const ok = await onReply(rText, c.id, rName.trim() || "Anonymous");
-                if (ok) {
+                setReplyError(null);
+                const err = await onReply(rText, c.id, rName.trim() || "Anonymous");
+                if (err) setReplyError(err);
+                else {
                   setRText("");
                   setReplyOpen(false);
                 }
