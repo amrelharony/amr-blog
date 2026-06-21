@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import { relTime } from "@/lib/microblog-format";
+import { logActivity } from "@/lib/activity";
 import type { Thought } from "@/lib/types";
 
 const MAX = 500;
@@ -68,6 +69,7 @@ export default function AdminThoughts() {
       }
       const { error } = await sb.from("microblog").insert(row);
       if (error) throw error;
+      await logActivity(sb, mode, "thought", null, String(row.content || "").slice(0, 80));
       setContent("");
       setScheduled("");
       setMsg({ t: "Posted.", ok: true });
@@ -82,12 +84,14 @@ export default function AdminThoughts() {
 
   const togglePin = async (t: Thought) => {
     await sb.from("microblog").update({ pinned: !t.pinned }).eq("id", t.id);
+    await logActivity(sb, t.pinned ? "unpin" : "pin", "thought", t.id, (t.content || "").slice(0, 60));
     await revalidate();
     load();
   };
   const del = async (id: string) => {
     if (!confirm("Delete this thought?")) return;
     await sb.from("microblog").delete().eq("id", id);
+    await logActivity(sb, "delete", "thought", id, "");
     await revalidate();
     load();
   };
