@@ -46,29 +46,58 @@ export function feedEntrance(wrap: HTMLElement) {
 }
 
 // ─── ScrollTrigger reveals (feed cards / generic) ───
+// Anything already at/above the fold is revealed immediately — a ScrollTrigger
+// created for an element whose start is already scrolled past never fires its
+// onEnter, which is what left infinite-scroll-appended cards stuck at opacity 0.
+// Only genuinely-below-fold elements get the scroll-in animation.
+const markRevealed = (els: Element[]) => els.forEach((el) => el.classList.add("gsap-revealed", "visible"));
+function partitionByFold(nodes: NodeListOf<Element>) {
+  const vh = window.innerHeight || document.documentElement.clientHeight;
+  // No viewport metric → reveal everything now (never leave cards hidden).
+  const limit = vh ? vh * 0.92 : Infinity;
+  const inView: Element[] = [];
+  const below: Element[] = [];
+  nodes.forEach((el) => (el.getBoundingClientRect().top < limit ? inView : below).push(el));
+  return { inView, below };
+}
+
+// Already-in-view elements: clear any inline opacity/transform and mark revealed
+// synchronously. Under `.gsap-active` the CSS base state is opacity:1, so this
+// is instant and bulletproof — it never depends on a gsap tween completing
+// (which is what could leave a card stuck at inline opacity:0).
+function revealNow(els: Element[]) {
+  if (!els.length) return;
+  gsap.killTweensOf(els);
+  gsap.set(els, { clearProps: "opacity,transform,x" });
+  markRevealed(els);
+}
+
 export function scrollReveals(container: HTMLElement) {
-  const revealEls = container.querySelectorAll(".lb-reveal:not(.gsap-revealed)");
-  const revealLeft = container.querySelectorAll(".lb-reveal-left:not(.gsap-revealed)");
-  if (revealEls.length) {
-    gsap.set(revealEls, { opacity: 0 });
-    ScrollTrigger.batch(revealEls, {
+  const reveal = partitionByFold(container.querySelectorAll(".lb-reveal:not(.gsap-revealed)"));
+  revealNow(reveal.inView);
+  if (reveal.below.length) {
+    gsap.set(reveal.below, { opacity: 0 });
+    ScrollTrigger.batch(reveal.below, {
       start: "top 92%",
       onEnter: (batch) =>
         gsap.to(batch, {
           opacity: 1, stagger: 0.09, duration: 0.6, ease: "power2.out",
-          onComplete: () => batch.forEach((el) => el.classList.add("gsap-revealed", "visible")),
+          onComplete: () => markRevealed(batch),
         }),
       once: true,
     });
   }
-  if (revealLeft.length) {
-    gsap.set(revealLeft, { opacity: 0, x: -24 });
-    ScrollTrigger.batch(revealLeft, {
+
+  const left = partitionByFold(container.querySelectorAll(".lb-reveal-left:not(.gsap-revealed)"));
+  revealNow(left.inView);
+  if (left.below.length) {
+    gsap.set(left.below, { opacity: 0, x: -24 });
+    ScrollTrigger.batch(left.below, {
       start: "top 92%",
       onEnter: (batch) =>
         gsap.to(batch, {
           opacity: 1, x: 0, stagger: 0.06, duration: 0.55, ease: "power3.out",
-          onComplete: () => batch.forEach((el) => el.classList.add("gsap-revealed", "visible")),
+          onComplete: () => markRevealed(batch),
         }),
       once: true,
     });
@@ -279,6 +308,12 @@ export function scrambleBrand(el: HTMLElement, text: string) {
     if (done < q.length) { f++; requestAnimationFrame(u); }
     else { el.textContent = text; }
   })();
+}
+
+// Recompute trigger positions after the feed appends cards, so freshly-inserted
+// below-fold triggers measure correctly (and any now in view fire their reveal).
+export function refreshScrollTriggers() {
+  ScrollTrigger.refresh();
 }
 
 export function killScrollTriggers() {
