@@ -2871,19 +2871,60 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
       });
     }, { passive: true });
 
-    var interactionHandler = function() { autoBehavior.lastInteractionTime = Date.now(); };
+    // ── Auto-hide on idle / auto-reveal on interaction ──────────────────
+    // After a stretch of zero interaction the mascot fades out so it stops
+    // competing with the page; any pointer/key/scroll/touch brings it back.
+    // While hidden the render loop parks (paused) to spare the GPU.
+    var IDLE_HIDE_MS = 12000; // no interaction for this long → fade out (tunable)
+    var idleHidden = false;
+    var idleHideTimer = null;
+
+    function scheduleIdleHide() {
+      clearTimeout(idleHideTimer);
+      idleHideTimer = setTimeout(idleHideMascot, IDLE_HIDE_MS);
+    }
+
+    function idleHideMascot() {
+      if (!floatEl || idleHidden) return;
+      // Never vanish mid-conversation or mid-drag — re-arm and try later.
+      if (isOpen || interaction.drag.active) { scheduleIdleHide(); return; }
+      idleHidden = true;
+      floatEl.style.opacity = '0';
+      floatEl.style.pointerEvents = 'none';
+      floatEl.setAttribute('aria-hidden', 'true');
+      paused = true; // stop rendering the now-invisible canvas
+    }
+
+    function idleShowMascot() {
+      if (!floatEl || !idleHidden) return;
+      idleHidden = false;
+      paused = false; // resume the render loop
+      floatEl.style.pointerEvents = 'auto';
+      floatEl.style.opacity = '1';
+      floatEl.removeAttribute('aria-hidden');
+    }
+
+    var interactionHandler = function() {
+      autoBehavior.lastInteractionTime = Date.now();
+      idleShowMascot();
+      scheduleIdleHide();
+    };
     document.addEventListener('mousemove', interactionHandler, { passive: true });
     document.addEventListener('keydown', interactionHandler, { passive: true });
     document.addEventListener('click', interactionHandler, { passive: true });
     document.addEventListener('touchstart', interactionHandler, { passive: true });
+    document.addEventListener('scroll', interactionHandler, { passive: true });
+    scheduleIdleHide(); // arm the first idle countdown
 
     var autoIv = setInterval(checkAutoTriggers, 5000);
     disposables.push({ dispose: function() {
       clearInterval(autoIv);
+      clearTimeout(idleHideTimer);
       document.removeEventListener('mousemove', interactionHandler);
       document.removeEventListener('keydown', interactionHandler);
       document.removeEventListener('click', interactionHandler);
       document.removeEventListener('touchstart', interactionHandler);
+      document.removeEventListener('scroll', interactionHandler);
     }});
   }
 
