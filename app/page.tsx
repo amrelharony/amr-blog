@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getFeedArticles } from "@/lib/queries/articles";
+import { getFeedArticles, getArticlesByCategory } from "@/lib/queries/articles";
 import { FEED_PAGE_SIZE } from "@/lib/constants";
 import { CATEGORIES } from "@/lib/categories";
 import type { ArticleCard } from "@/lib/types";
@@ -25,9 +25,19 @@ function topTags(list: ArticleCard[], n = 10): string[] {
     .slice(0, n);
 }
 
+// The homepage opens on the Fintech feed by default.
+const DEFAULT_CATEGORY = "Fintech";
+
 export default async function FeedPage() {
-  // One extra row as the has-more sentinel; /api/feed serves later pages.
-  const rows = await getFeedArticles(FEED_PAGE_SIZE + 1);
+  // Default to the Fintech feed. Until that category is populated it would be
+  // empty, so fall back to the full newest-first feed so the homepage is never
+  // blank. One extra row is the has-more sentinel; /api/feed serves later pages.
+  let category: string | null = DEFAULT_CATEGORY;
+  let rows = await getArticlesByCategory(DEFAULT_CATEGORY, FEED_PAGE_SIZE + 1, 0);
+  if (rows.length === 0) {
+    category = null;
+    rows = await getFeedArticles(FEED_PAGE_SIZE + 1);
+  }
   const hasMore = rows.length > FEED_PAGE_SIZE;
   const articles = hasMore ? rows.slice(0, FEED_PAGE_SIZE) : rows;
   const tags = topTags(articles);
@@ -52,11 +62,20 @@ export default async function FeedPage() {
       </header>
 
       <nav className="lb-cat-filters lb-reveal" aria-label="Browse by category">
-        {CATEGORIES.map((c) => (
-          <Link key={c.slug} className="lb-cat-chip" href={`/category/${c.slug}`}>
-            <i className={`fa-solid ${c.icon}`} aria-hidden="true" /> {c.label}
-          </Link>
-        ))}
+        {CATEGORIES.map((c) => {
+          const active = category !== null && c.label === category;
+          return (
+            <Link
+              key={c.slug}
+              // The active (default) category links back home; others open their hub.
+              className={"lb-cat-chip" + (active ? " active" : "")}
+              href={active ? "/" : `/category/${c.slug}`}
+              aria-pressed={active}
+            >
+              <i className={`fa-solid ${c.icon}`} aria-hidden="true" /> {c.label}
+            </Link>
+          );
+        })}
       </nav>
 
       <div className="lb-search-wrap lb-reveal" style={{ transitionDelay: ".1s" }}>
@@ -102,7 +121,11 @@ export default async function FeedPage() {
                 <ArticleCardV2 key={a.id} a={a} idx={idx} />
               ))}
             </div>
-            <FeedLoadMore initialSlugs={articles.map((a) => a.slug)} hasMore={hasMore} />
+            <FeedLoadMore
+              category={category ?? undefined}
+              initialSlugs={articles.map((a) => a.slug)}
+              hasMore={hasMore}
+            />
           </>
         )}
       </main>
