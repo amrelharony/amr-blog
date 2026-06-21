@@ -17,13 +17,41 @@ export default function AdminSubscribers() {
   const [subs, setSubs] = useState<Sub[]>([]);
   const [domains, setDomains] = useState<{ id: string; domain: string }[]>([]);
   const [newDomain, setNewDomain] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const load = useCallback(async () => {
-    const [{ data: s }, { data: d }] = await Promise.all([
-      sb.from("newsletter_subscribers").select("*").order("created_at", { ascending: false }),
-      sb.from("blocked_email_domains").select("id,domain").order("domain"),
-    ]);
-    setSubs((s || []) as Sub[]);
+    // Page past PostgREST's ~1000-row cap so the list, the counts, and the CSV
+    // reflect the FULL subscriber table (an un-ranged select silently truncates).
+    const PG = 1000;
+    const all: Sub[] = [];
+    let failed = false;
+    for (let from = 0; from < 1_000_000; from += PG) {
+      const { data, error } = await sb
+        .from("newsletter_subscribers")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false }) // stable tiebreaker for safe paging
+        .range(from, from + PG - 1);
+      if (error) {
+        failed = true;
+        break;
+      }
+      const rows = (data || []) as Sub[];
+      all.push(...rows);
+      if (rows.length < PG) break;
+    }
+    if (failed) {
+      // Never overwrite a known-good list with a partial one — the counts and CSV
+      // would silently under-report. Keep prior data and surface the error.
+      setLoadError("Couldn't load the full subscriber list — click Refresh to retry.");
+      return;
+    }
+    setLoadError("");
+    const { data: d } = await sb
+      .from("blocked_email_domains")
+      .select("id,domain")
+      .order("domain");
+    setSubs(all);
     setDomains((d || []) as { id: string; domain: string }[]);
   }, [sb]);
   useEffect(() => {
@@ -71,10 +99,14 @@ export default function AdminSubscribers() {
         {confirmed.length} confirmed · {subs.length} total
       </div>
       <div className="adm-actions" style={{ marginBottom: 16 }}>
-        <button className="adm-btn" onClick={exportCsv} disabled={!subs.length}>
+        <button className="adm-btn" onClick={exportCsv} disabled={!subs.length || !!loadError}>
           ⬇ Export CSV
         </button>
+        <button className="adm-btn" onClick={load}>
+          ↻ Refresh
+        </button>
       </div>
+      {loadError && <div className="adm-msg err" style={{ marginBottom: 16 }}>{loadError}</div>}
 
       <div className="adm-list" style={{ marginBottom: 24 }}>
         {subs.length === 0 && <div className="adm-sub">No subscribers yet.</div>}
