@@ -7,6 +7,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { matchQuery, buildContext, matchedCats } from "@/lib/kb/match";
+import { resolveLimits, rateLimitHeaders } from "@/lib/chat/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,26 +42,6 @@ function validateHistory(history: unknown): Msg[] {
     .map((m) => ({ role: m.role, content: sanitize(m.content).slice(0, MAX_MSG_LEN * 2) }));
 }
 
-interface RateLimits {
-  allowed: boolean;
-  daily_used?: number;
-  daily_max?: number;
-  weekly_used?: number;
-  weekly_max?: number;
-  monthly_used?: number;
-  monthly_max?: number;
-}
-function rateLimitHeaders(l: RateLimits): Record<string, string> {
-  return {
-    "X-RateLimit-Daily": String(l.daily_used || 0),
-    "X-RateLimit-Daily-Max": String(l.daily_max || 25),
-    "X-RateLimit-Weekly": String(l.weekly_used || 0),
-    "X-RateLimit-Weekly-Max": String(l.weekly_max || 100),
-    "X-RateLimit-Monthly": String(l.monthly_used || 0),
-    "X-RateLimit-Monthly-Max": String(l.monthly_max || 300),
-  };
-}
-
 function json(data: unknown, status: number, extra: Record<string, string> = {}) {
   return new Response(JSON.stringify(data), {
     status,
@@ -90,20 +71,13 @@ export async function POST(req: NextRequest) {
   // Article-aware: the client passes the current post's title+excerpt when on /p/<slug>.
   const pageContext = sanitize(body.pageContext || "").slice(0, 1200);
 
-  // Rate limit. The live Connect RPCs take the (server-verified) user id explicitly:
-  //   check_chat_rate_limit(p_user_id) · record_chat_usage(p_user_id, p_tokens, p_model)
-  const { data: rl, error: rlErr } = await supabase.rpc("check_chat_rate_limit", {
-    p_user_id: user.id,
-  });
-  const limits: RateLimits = (Array.isArray(rl) ? rl[0] : rl) || {
-    allowed: !rlErr,
-    daily_used: 0,
-    daily_max: 25,
-    weekly_used: 0,
-    weekly_max: 100,
-    monthly_used: 0,
-    monthly_max: 300,
-  };
+  // Rate limit. These RPCs take NO user id — they resolve the caller via auth.uid()
+  // off the cookie session (this client is cookie-aware), so passing p_user_id makes
+  // PostgREST 404 on the overload and would block every request:
+  //   check_chat_rate_limit() · record_chat_usage(p_model, p_tokens)
+  const { data: rl, error: rlErr } = await supabase.rpc("check_chat_rate_limit");
+  if (rlErr) console.warn("check_chat_rate_limit failed (allowing request):", rlErr.message);
+  const limits = resolveLimits(rl); // fails open on error/empty/unexpected shape — see lib/chat/rate-limit
   if (!limits.allowed) {
     return json(
       { error: "Rate limit exceeded" },
@@ -228,7 +202,6 @@ export async function POST(req: NextRequest) {
         ctrl.close();
         try {
           await supabase.rpc("record_chat_usage", {
-            p_user_id: user.id,
             p_tokens: tokensTotal || estTokens,
             p_model: OPENCLAW_MODEL,
           });
