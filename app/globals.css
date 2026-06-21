@@ -316,6 +316,12 @@ html {
   background: var(--bg);
 }
 
+/* Light theme: flip color-scheme so native UI (scrollbars, incl. the TOC's)
+   renders light instead of staying dark. */
+html.light-mode {
+  color-scheme: light;
+}
+
 body {
   font-family: "Inter", system-ui, -apple-system, sans-serif;
   background: transparent;

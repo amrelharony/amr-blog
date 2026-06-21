@@ -24,6 +24,7 @@ export default function FeedAnimations() {
     const offMore = onFeedMore(() => {
       if (anim) {
         anim.scrollReveals(wrap);
+        anim.refreshScrollTriggers();
         wrap.querySelectorAll(".lb-card-v2").forEach((c) => anim!.cardMicro(c as HTMLElement));
       } else {
         // Cards appended before the gsap chunk arrives: just show them.
