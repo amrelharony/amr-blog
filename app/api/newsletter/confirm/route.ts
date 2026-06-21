@@ -33,7 +33,17 @@ export async function GET(req: NextRequest) {
     return page("Invalid Link", `<div class="icon">⚠️</div><div class="title">Invalid Link</div><div class="sub">This confirmation link is missing or malformed.</div><a class="btn" href="${SITE}">Go to Blog</a>`);
   }
   const res = await rpc("confirm_newsletter", { p_token: token });
-  if (!res.ok) {
+  // confirm_newsletter returns a boolean — false for an unknown/expired/used token —
+  // and PostgREST replies HTTP 200 even when it returns false, so res.ok alone isn't a
+  // success signal. Treat ONLY an explicit `false` as failure so any other return shape
+  // can't regress valid confirmations.
+  let confirmed = res.ok;
+  if (res.ok) {
+    try {
+      if ((await res.json()) === false) confirmed = false;
+    } catch {}
+  }
+  if (!confirmed) {
     return page("Invalid or Expired", `<div class="icon">⚠️</div><div class="title">Invalid or Expired Link</div><div class="sub">This confirmation link may have expired. Please subscribe again.</div><a class="btn" href="${SITE}">Subscribe Again</a>`);
   }
   return page("Subscription Confirmed", `<div class="icon">✅</div><div class="title">You're In!</div><div class="sub">Your subscription is confirmed. You'll receive a biweekly digest of new articles from Amr Elharony.</div><a class="btn" href="${SITE}">Read Articles</a>`);

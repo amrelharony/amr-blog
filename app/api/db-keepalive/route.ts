@@ -8,12 +8,13 @@ const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export async function GET(req: NextRequest) {
-  const ua = (req.headers.get("user-agent") || "").toLowerCase();
+  // Require the cron secret: Vercel auto-sends `Authorization: Bearer $CRON_SECRET` on
+  // scheduled invocations when CRON_SECRET is set. The vercel-cron User-Agent is
+  // client-spoofable, so it is not an authentication factor.
   const cronSecret = process.env.CRON_SECRET;
   const auth = req.headers.get("authorization") || "";
-  const isVercelCron = ua.startsWith("vercel-cron/");
-  const hasSecret = cronSecret && auth === `Bearer ${cronSecret}`;
-  if (!isVercelCron && !hasSecret) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!cronSecret || auth !== `Bearer ${cronSecret}`)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const ts = new Date().toISOString();
   const sbHeaders = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" };

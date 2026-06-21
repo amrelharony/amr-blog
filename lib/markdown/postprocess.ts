@@ -61,7 +61,7 @@ export function processFootnotes(html: string): string {
   });
 
   html = html.replace(refRegex, (_m, id: string) => {
-    if (!refs[id]) return `[^${id}]`;
+    if (!(id in refs)) return `[^${id}]`;
     return `<sup><a href="#fn-${id}" class="lb-fn-ref" data-fn="${esc(id)}" data-fn-text="${esc(refs[id])}">${id}</a></sup>`;
   });
 

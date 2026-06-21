@@ -55,6 +55,11 @@ export default function AdminComments() {
   useEffect(() => {
     load();
   }, [load]);
+  // Clear the selection whenever the visible result set changes (page/filter) so a bulk
+  // action can never operate on comments that have scrolled off-screen.
+  useEffect(() => {
+    setSelected(new Set());
+  }, [page, status]);
 
   const toggleSel = (id: string) =>
     setSelected((s) => {

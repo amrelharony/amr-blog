@@ -34,7 +34,12 @@ export async function proxy(request: NextRequest) {
     if (!isAdminId(user?.id)) {
       const url = request.nextUrl.clone();
       url.pathname = "/admin/login";
-      return NextResponse.redirect(url);
+      const redirect = NextResponse.redirect(url);
+      // Carry over any session cookies getUser() just rotated onto `response`; a freshly
+      // constructed redirect has an empty cookie jar, so otherwise the refreshed tokens
+      // would be dropped on this request (the documented Supabase SSR pitfall).
+      response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+      return redirect;
     }
   }
 

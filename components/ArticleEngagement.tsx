@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import { ensureAnonSession } from "@/lib/supabase/anon";
 
@@ -108,14 +108,22 @@ export default function ArticleEngagement({
     );
   }, [sb, slug]);
 
+  // Track the current article so a late comments response from a PREVIOUS article
+  // (this client component is reused across /p/[slug] navigations) can't overwrite
+  // the current article's discussion.
+  const articleIdRef = useRef(articleId);
+  useEffect(() => {
+    articleIdRef.current = articleId;
+  }, [articleId]);
   const loadComments = useCallback(async () => {
+    const id = articleId;
     const { data } = await sb
       .from("article_comments")
       .select("*")
-      .eq("article_id", articleId)
+      .eq("article_id", id)
       .eq("status", "approved") // RLS enforces this for anon; explicit so admins see the public view too
       .order("created_at", { ascending: true });
-    setComments((data || []) as Comment[]);
+    if (id === articleIdRef.current) setComments((data || []) as Comment[]);
   }, [sb, articleId]);
   useEffect(() => {
     loadComments();

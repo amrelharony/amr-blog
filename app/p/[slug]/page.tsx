@@ -8,7 +8,7 @@ import {
   getSeriesSiblings,
 } from "@/lib/queries/articles";
 import { renderArticleHtml } from "@/lib/markdown/parse";
-import { fmtDate, readingTime } from "@/lib/format";
+import { fmtDate, readingTime, isoDate } from "@/lib/format";
 import ArticleAnimations from "@/components/ArticleAnimations";
 import ArticleReader from "@/components/ArticleReader";
 import ArticleEngagement from "@/components/ArticleEngagement";
@@ -163,7 +163,7 @@ export default async function ArticlePage({ params }: Params) {
         >
           <header className="lb-article-header">
             <div className="lb-article-date lb-reveal">
-              <time dateTime={new Date(a.created_at).toISOString()} itemProp="datePublished">
+              <time dateTime={isoDate(a.created_at)} itemProp="datePublished">
                 {fmtDate(a.created_at)}
               </time>
             </div>

@@ -22,11 +22,14 @@ export default function FeedLoadMore({
   initialSlugs,
   hasMore: initialHasMore,
   category,
+  tag,
 }: {
   initialSlugs: string[];
   hasMore: boolean;
   /** When set, pages are filtered to this category (e.g. on /category/[slug]). */
   category?: string;
+  /** When set, pages are filtered to this tag (e.g. on /tag/[tag]). */
+  tag?: string;
 }) {
   const [extra, setExtra] = useState<ArticleCard[]>([]);
   const [offset, setOffset] = useState(initialSlugs.length);
@@ -61,7 +64,9 @@ export default function FeedLoadMore({
     setLoading(true);
     try {
       const r = await fetch(
-        `/api/feed?offset=${offset}${category ? `&category=${encodeURIComponent(category)}` : ""}`,
+        `/api/feed?offset=${offset}` +
+          (category ? `&category=${encodeURIComponent(category)}` : "") +
+          (tag ? `&tag=${encodeURIComponent(tag)}` : ""),
       );
       if (!r.ok) throw new Error(`feed HTTP ${r.status}`);
       const data = (await r.json()) as FeedPage;

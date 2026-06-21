@@ -8,10 +8,12 @@ import { runBulletinSend } from "@/lib/newsletter/send";
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
+  // Vercel auto-attaches `Authorization: Bearer $CRON_SECRET` to cron invocations when
+  // CRON_SECRET is set. The vercel-cron User-Agent is attacker-spoofable, so it must
+  // NEVER be sufficient on its own to trigger this email-dispatching send.
   const cronSecret = process.env.CRON_SECRET;
-  const ua = (req.headers.get("user-agent") || "").toLowerCase();
   const auth = req.headers.get("authorization") || "";
-  if (!(ua.startsWith("vercel-cron/") || (cronSecret && auth === `Bearer ${cronSecret}`)))
+  if (!cronSecret || auth !== `Bearer ${cronSecret}`)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const { status, result } = await runBulletinSend();

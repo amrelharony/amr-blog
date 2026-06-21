@@ -69,4 +69,18 @@ describe("fmtContent", () => {
     expect(out).toContain('<a href="https://example.com/page"');
     expect(out).toContain('rel="noopener"');
   });
+
+  it("keeps a URL #fragment in the link instead of turning it into a hashtag", () => {
+    const out = fmtContent("read https://en.wikipedia.org/wiki/Foo#History now");
+    // The whole URL (including the fragment) is the anchor href...
+    expect(out).toContain('<a href="https://en.wikipedia.org/wiki/Foo#History"');
+    // ...and no spurious hashtag chip is injected mid-URL.
+    expect(out).not.toContain('data-tag="History"');
+  });
+
+  it("still links a standalone hashtag that follows a URL", () => {
+    const out = fmtContent("https://example.com #agile");
+    expect(out).toContain('<a href="https://example.com"');
+    expect(out).toContain('data-tag="agile"');
+  });
 });

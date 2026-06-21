@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { esc, readingTime, fmtDate, slugify } from "@/lib/format";
+import { esc, readingTime, fmtDate, slugify, isoDate } from "@/lib/format";
 
 describe("esc", () => {
   it("escapes the four HTML-sensitive characters", () => {
@@ -15,6 +15,22 @@ describe("esc", () => {
   it("returns empty string for null and undefined", () => {
     expect(esc(null)).toBe("");
     expect(esc(undefined)).toBe("");
+  });
+
+  it("strips XML-illegal C0 control chars but keeps tab/newline/CR", () => {
+    expect(esc("a\x00b\x0Bc\x1Fd")).toBe("abcd");
+    expect(esc("keep\ttab\nlf\rcr")).toBe("keep\ttab\nlf\rcr");
+  });
+});
+
+describe("isoDate", () => {
+  it("returns an ISO-8601 string for a valid date", () => {
+    expect(isoDate("2026-01-05T12:00:00Z")).toBe("2026-01-05T12:00:00.000Z");
+  });
+
+  it("returns undefined for an unparseable date instead of throwing", () => {
+    expect(isoDate("not-a-date")).toBeUndefined();
+    expect(() => isoDate("garbage")).not.toThrow();
   });
 });
 

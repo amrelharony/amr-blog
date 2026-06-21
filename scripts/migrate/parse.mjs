@@ -55,7 +55,10 @@ function bodyRegion(html) {
     if (i !== -1) i = html.indexOf("</p>", i) + 4;
     else {
       const h1 = html.search(/<\/h1>/i);
-      i = h1 !== -1 ? h1 + 5 : (html.search(/<body[^>]*>/i) + 6);
+      // Advance past the FULL opening <body ...> tag (not a fixed +6, which lands
+      // mid-tag and leaks attribute text when <body> carries attributes).
+      const bm = html.match(/<body[^>]*>/i);
+      i = h1 !== -1 ? h1 + 5 : (bm ? bm.index + bm[0].length : 0);
     }
   }
   const end = html.lastIndexOf("</body>");

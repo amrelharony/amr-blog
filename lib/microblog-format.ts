@@ -37,7 +37,10 @@ function renderMd(s: string): string {
 export function fmtContent(raw: string): string {
   let s = esc(raw);
   s = renderMd(s);
-  s = s.replace(/#(\w+)/g, '<span class="hashtag" data-tag="$1">#$1</span>');
+  // Don't turn a URL fragment (e.g. /wiki/Foo#History) into a hashtag: only match a '#'
+  // that isn't preceded by URL-ish characters, so the bare-URL autolink below still sees
+  // the whole link. Standalone "#tag" (line start / after whitespace) still matches.
+  s = s.replace(/(?<![\w\/#?&=.-])#(\w+)/g, '<span class="hashtag" data-tag="$1">#$1</span>');
   s = s.replace(
     /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})(?:[^\s<]*)/g,
     '<div class="blog-yt-embed"><iframe src="https://www.youtube-nocookie.com/embed/$1" allowfullscreen loading="lazy"></iframe></div>',

@@ -46,6 +46,35 @@ async function rpc<T>(fn: string, params?: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// PostgREST caps every result set — including set-returning RPCs — at ~1000 rows. For
+// reads that must return EVERY row (the full recipient list), page with the Range header
+// until a short page comes back. Relies on the RPC having a deterministic ORDER BY, which
+// the offset-based resume in runBulletinSend already assumes.
+async function rpcAll<T>(fn: string, params?: unknown): Promise<T[]> {
+  const PAGE = 1000;
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const res = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
+      method: "POST",
+      headers: {
+        apikey: SB_KEY,
+        Authorization: `Bearer ${SB_KEY}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "Range-Unit": "items",
+        Range: `${from}-${from + PAGE - 1}`,
+      },
+      body: JSON.stringify(params || {}),
+    });
+    if (!res.ok) throw new Error(`RPC ${fn} failed: ${res.status} ${await res.text()}`);
+    const rows = (await res.json()) as T[];
+    if (!Array.isArray(rows) || rows.length === 0) break;
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
 /** Run (or resume) a digest send. Returns an HTTP status + JSON body for the caller. */
 export async function runBulletinSend(): Promise<{ status: number; result: BulletinResult }> {
   const RESEND_KEY = process.env.RESEND_API_KEY;
@@ -66,7 +95,7 @@ export async function runBulletinSend(): Promise<{ status: number; result: Bulle
   if (!Array.isArray(articles) || articles.length === 0)
     return { status: 200, result: { ok: true, skipped: true, reason: "No new articles" } };
 
-  const subscribers = await rpc<Subscriber[]>("get_bulletin_subscribers");
+  const subscribers = await rpcAll<Subscriber>("get_bulletin_subscribers");
   if (!Array.isArray(subscribers) || subscribers.length === 0)
     return { status: 200, result: { ok: true, skipped: true, reason: "No confirmed subscribers" } };
 
@@ -128,7 +157,7 @@ export async function previewBulletin(): Promise<{ html: string; articleCount: n
   const last = await rpc<{ sent_at: string }[]>("get_last_bulletin", { p_status: "sent" });
   const since = Array.isArray(last) && last.length ? last[0].sent_at : new Date(Date.now() - 14 * 86400000).toISOString();
   const articles = await rpc<BulletinArticle[]>("get_bulletin_articles", { p_since: since });
-  const subscribers = await rpc<Subscriber[]>("get_bulletin_subscribers");
+  const subscribers = await rpcAll<Subscriber>("get_bulletin_subscribers");
   const list = Array.isArray(articles) ? articles : [];
   const html = list.length ? bulletinHTML(list, `${SITE}/api/newsletter/unsubscribe?token=PREVIEW`) : "";
   return { html, articleCount: list.length, subscriberCount: Array.isArray(subscribers) ? subscribers.length : 0, since };
