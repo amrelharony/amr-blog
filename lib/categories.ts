@@ -9,6 +9,13 @@ export interface CategoryDef {
 
 export const CATEGORIES: CategoryDef[] = [
   {
+    slug: "fintech",
+    label: "Fintech",
+    icon: "fa-money-bill-trend-up",
+    blurb:
+      "Payments, banking, crypto, and lending — the technology rewiring how money moves.",
+  },
+  {
     slug: "leadership",
     label: "Leadership",
     icon: "fa-users-gear",
@@ -20,7 +27,7 @@ export const CATEGORIES: CategoryDef[] = [
     label: "Business",
     icon: "fa-chart-line",
     blurb:
-      "Strategy, fintech, markets, and the economy — how companies grow, compete, and transform.",
+      "Strategy, markets, and the economy — how companies grow, compete, and transform.",
   },
   {
     slug: "tech",
