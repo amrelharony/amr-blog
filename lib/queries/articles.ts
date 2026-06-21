@@ -14,6 +14,7 @@ export async function getFeedArticles(limit = 50, offset = 0): Promise<ArticleCa
     .select(CARD_COLUMNS)
     .eq("published", true)
     .order("created_at", { ascending: false })
+    .order("id", { ascending: false }) // stable tiebreaker so offset paging can't skip/dupe on tied dates
     .range(offset, offset + limit - 1);
   if (error) throw error;
   return (data ?? []) as ArticleCard[];
@@ -134,6 +135,7 @@ export async function getArticlesByCategory(
     .eq("published", true)
     .eq("category", category)
     .order("created_at", { ascending: false })
+    .order("id", { ascending: false }) // stable tiebreaker so offset paging can't skip/dupe on tied dates
     .range(offset, offset + limit - 1);
   if (error) throw error;
   return (data ?? []) as ArticleCard[];
@@ -151,8 +153,12 @@ export async function getCategoryCount(category: string): Promise<number> {
   return count ?? 0;
 }
 
-/** Published articles carrying a given tag, newest first. */
-export async function getArticlesByTag(tag: string, limit = 50): Promise<ArticleCard[]> {
+/** Published articles carrying a given tag, newest first — range-paged for archives. */
+export async function getArticlesByTag(
+  tag: string,
+  limit = 24,
+  offset = 0,
+): Promise<ArticleCard[]> {
   const sb = createPublicClient();
   const { data, error } = await sb
     .from("longform_articles")
@@ -160,9 +166,22 @@ export async function getArticlesByTag(tag: string, limit = 50): Promise<Article
     .eq("published", true)
     .contains("tags", [tag])
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .order("id", { ascending: false }) // stable tiebreaker so offset paging can't skip/dupe on tied dates
+    .range(offset, offset + limit - 1);
   if (error) throw error;
   return (data ?? []) as ArticleCard[];
+}
+
+/** Exact count of published articles carrying a given tag (for pagination + count). */
+export async function getTagCount(tag: string): Promise<number> {
+  const sb = createPublicClient();
+  const { count, error } = await sb
+    .from("longform_articles")
+    .select("id", { count: "exact", head: true })
+    .eq("published", true)
+    .contains("tags", [tag]);
+  if (error) throw error;
+  return count ?? 0;
 }
 
 export interface SeriesSibling {

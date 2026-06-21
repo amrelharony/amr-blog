@@ -101,7 +101,10 @@ export default function TtsButton() {
     const ns = speeds[(speeds.indexOf(speed) + 1) % speeds.length];
     setSpeed(ns);
     speedRef.current = ns;
-    if (speechSynthesis.speaking) jump(idxRef.current);
+    // A paused utterance still reports speaking===true; restarting it here would silently
+    // resume playback (and desync the ▶/⏸ button). Only restart when actually playing —
+    // a speed change made while paused takes effect at the next sentence.
+    if (speechSynthesis.speaking && !speechSynthesis.paused) jump(idxRef.current);
   };
 
   if (!supported) return null;

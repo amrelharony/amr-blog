@@ -87,6 +87,9 @@ export default function WritePage() {
   // startEdit/startNew (rapid clicks on different list items would otherwise
   // pair one article's form with another's restore banner).
   const editSeq = useRef(0);
+  // The slug the open article was loaded with, so a rename can revalidate the OLD
+  // /p/<slug> path too (otherwise the old URL serves stale ISR content).
+  const origSlugRef = useRef("");
 
   const loadList = useCallback(async () => {
     setListBusy(true);
@@ -144,6 +147,7 @@ export default function WritePage() {
   const startNew = () => {
     editSeq.current++; // supersede any in-flight startEdit
     skipPersist.current = true;
+    origSlugRef.current = "";
     setForm({ ...EMPTY });
     setSlugLocked(false);
     setReviewUrl("");
@@ -175,6 +179,7 @@ export default function WritePage() {
       scheduled: toLocalInput(data.scheduled_at),
       tldr: data.tldr || "",
     });
+    origSlugRef.current = data.slug || "";
     setLoadedStatus(data.published ? "live" : data.scheduled_at ? "scheduled" : "draft");
     setPreviewOn(false);
     setPreviewHtml("");
@@ -306,7 +311,9 @@ export default function WritePage() {
     const ids = [...selected];
     if (!ids.length) return;
     setListBusy(true);
-    const row = pub ? { published: true, scheduled_at: null } : { published: false };
+    // Unpublish must also clear scheduled_at, else the publish_scheduled_posts cron
+    // re-publishes the article on its next tick (matches single-article save('draft')).
+    const row = pub ? { published: true, scheduled_at: null } : { published: false, scheduled_at: null };
     const { error } = await sb.from("longform_articles").update(row).in("id", ids);
     setListBusy(false);
     if (error) setListMsg("Failed: " + error.message);
@@ -331,7 +338,14 @@ export default function WritePage() {
     const { error } = await sb.from("longform_articles").delete().in("id", ids);
     setListBusy(false);
     if (error) setListMsg("Failed: " + error.message);
-    else afterBulk(`Deleted ${ids.length}.`);
+    else {
+      try {
+        ids.forEach((id) => localStorage.removeItem(draftKey(id))); // clear orphaned autosave drafts
+      } catch {
+        /* ignore */
+      }
+      afterBulk(`Deleted ${ids.length}.`);
+    }
   };
 
   // Categorize EVERY uncategorized article (filter-predicate RPC — scales past
@@ -413,11 +427,15 @@ export default function WritePage() {
         savedId = inserted?.id || "";
       }
       await revalidate(slug);
+      // On a slug rename, also revalidate the OLD path so /p/<oldslug> stops serving
+      // stale ISR content (it will re-render and 404 since the row moved).
+      if (form.id && origSlugRef.current && origSlugRef.current !== slug) await revalidate(origSlugRef.current);
       await logActivity(sb, mode, "article", savedId, form.title.trim());
       clearDraft(); // clears the key for the slot we saved under (form.id here)
       setDirty(false);
       setMsg({ t: "Saved.", ok: true });
       setSlugLocked(true);
+      origSlugRef.current = slug; // a later rename in the same session revalidates from here
       skipPersist.current = true; // don't let the form update below re-create the draft
       setForm((f) => ({ ...f, slug, id: savedId }));
       loadList();
@@ -434,6 +452,11 @@ export default function WritePage() {
     if (!error) {
       await revalidate(slug);
       await logActivity(sb, "delete", "article", id, slug);
+      try {
+        localStorage.removeItem(draftKey(id)); // don't leave an orphaned autosave draft
+      } catch {
+        /* ignore */
+      }
       if (form.id === id) setEditing(false);
       loadList();
     }

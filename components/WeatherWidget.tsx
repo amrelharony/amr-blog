@@ -33,7 +33,8 @@ export default function WeatherWidget() {
 
   useEffect(() => {
     const load = async () => {
-      if (document.hidden) return;
+      // The cache read/dispatch is cheap and must run even in a hidden tab (e.g. a tab
+      // opened in the background) so the widget isn't stuck on the spinner forever.
       try {
         const cached = JSON.parse(localStorage.getItem(LS) || "null");
         if (cached && Date.now() - cached.ts < TTL) {
@@ -42,6 +43,8 @@ export default function WeatherWidget() {
           return;
         }
       } catch {}
+      // Only defer the network fetch while hidden (saves a request in background tabs).
+      if (document.hidden) return;
       try {
         const r = await fetch(API);
         if (!r.ok) return;
@@ -60,7 +63,15 @@ export default function WeatherWidget() {
     };
     load();
     const timer = setInterval(load, TTL);
-    return () => clearInterval(timer);
+    // A tab that started hidden had its fetch deferred; refresh promptly once it's visible.
+    const onVis = () => {
+      if (!document.hidden) load();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, []);
 
   if (!w) {

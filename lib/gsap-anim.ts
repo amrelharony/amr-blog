@@ -6,6 +6,7 @@
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { prefersReducedMotion } from "@/lib/reveal";
+import { esc } from "@/lib/format";
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger);
@@ -145,7 +146,9 @@ export function articleEntrance(articleEl: HTMLElement) {
     const h1Text = h1.textContent || "";
     h1.innerHTML = h1Text
       .split(/\s+/)
-      .map((w) => `<span style="display:inline-block;perspective:600px"><span class="_gsap-word" style="display:inline-block">${w}</span></span>`)
+      // esc(w): the H1 title is plain text read back from the DOM, but innerHTML
+      // re-parses it — escape each word so a title containing markup can't inject HTML.
+      .map((w) => `<span style="display:inline-block;perspective:600px"><span class="_gsap-word" style="display:inline-block">${esc(w)}</span></span>`)
       .join(" ");
     const wordEls = h1.querySelectorAll("._gsap-word");
     gsap.set(wordEls, { opacity: 0, rotationX: -80, transformOrigin: "50% 100%", filter: "blur(6px)", y: 20 });

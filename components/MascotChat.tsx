@@ -74,7 +74,9 @@ async function findSources(q: string): Promise<Source[]> {
     if (!data || !data.length) {
       const kw = q.split(/\s+/).filter((w) => w.length > 4).sort((a, b) => b.length - a.length)[0];
       if (kw) {
-        const r = await sb.from("longform_articles").select("slug,title").eq("published", true).ilike("title", `%${kw}%`).limit(3);
+        // Escape LIKE metacharacters so a token like "100%off" isn't treated as a wildcard.
+        const safe = kw.replace(/[%_\\]/g, (m) => "\\" + m);
+        const r = await sb.from("longform_articles").select("slug,title").eq("published", true).ilike("title", `%${safe}%`).limit(3);
         data = r.data;
       }
     }
@@ -125,6 +127,7 @@ export default function MascotChat() {
   const silenceTimerRef = useRef<number | null>(null);
   const finalTranscriptRef = useRef("");
   const sendRef = useRef<(raw: string) => void>(() => {});
+  const openRef = useRef(false);
 
   // Open hooks for the mascot.
   useEffect(() => {
@@ -229,9 +232,10 @@ export default function MascotChat() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [msgs, streaming]);
 
-  // Keep the latest send() reachable from the speech-recognition auto-submit timer.
+  // Keep the latest send() and open-state reachable from the speech-recognition timer.
   useEffect(() => {
     sendRef.current = send;
+    openRef.current = open;
   });
 
   // Voice input is gated on browser support (Chrome/Edge/Safari Web Speech API).
@@ -376,7 +380,9 @@ export default function MascotChat() {
             try {
               recognitionRef.current?.stop();
             } catch {}
-            sendRef.current(inputRef.current?.value || finalTranscriptRef.current);
+            // A final result can arrive just after the panel closed (stop() still returns
+            // buffered audio); don't fire an unintended chat request when it's not open.
+            if (openRef.current) sendRef.current(inputRef.current?.value || finalTranscriptRef.current);
           }, 2000);
         }
       };

@@ -54,6 +54,22 @@ async function sbUpdate(table, id, data) {
   if (!res.ok) throw new Error(`Supabase PATCH ${table}/${id}: ${res.status} ${await res.text()}`);
 }
 
+// Persist the LinkedIn dedup flag in its OWN write, retried, so a transient failure of
+// a later bookkeeping update can't leave a row that was already posted eligible for a
+// re-post on the next cron run (the linkedin_posted flag is the only dedup guard).
+async function markLinkedinPosted(table, id) {
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await sbUpdate(table, id, { linkedin_posted: true });
+      return;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr;
+}
+
 async function refreshTokenIfNeeded() {
   const clientId = process.env.LINKEDIN_CLIENT_ID;
   const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
@@ -248,7 +264,9 @@ async function publishThoughts() {
         await postToLinkedIn(row.content);
       }
 
-      await sbUpdate('microblog', row.id, { linkedin_posted: true, published: true });
+      // Dedup flag first (own retried write), then bookkeeping — see publishArticles.
+      await markLinkedinPosted('microblog', row.id);
+      await sbUpdate('microblog', row.id, { published: true });
       console.log(`  Done: ${row.id}`);
     } catch (err) {
       console.error(`  Failed thought ${row.id}: ${err.message}`);
@@ -287,7 +305,12 @@ async function publishArticles() {
       }
       await postToLinkedIn(text, url, thumbnailUrn);
 
-      await sbUpdate('longform_articles', row.id, { linkedin_posted: true, published: true, ...(row.scheduled_at ? { created_at: row.scheduled_at } : {}) });
+      // Set the dedup flag FIRST in its own retried write; only then do the (less
+      // critical) bookkeeping, so a failure there can't cause a duplicate post.
+      await markLinkedinPosted('longform_articles', row.id);
+      if (row.scheduled_at) {
+        await sbUpdate('longform_articles', row.id, { published: true, created_at: row.scheduled_at });
+      }
       console.log(`  Done: ${row.id}`);
     } catch (err) {
       console.error(`  Failed article ${row.id}: ${err.message}`);

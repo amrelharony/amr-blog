@@ -89,6 +89,14 @@ describe("processFootnotes", () => {
     expect(out).toBe("<p>Dangling[^nope]</p>");
   });
 
+  it("links a defined-but-empty footnote instead of leaving a broken literal ref", () => {
+    const out = processFootnotes("<p>Claim[^1]</p><p>[^1]: </p>");
+    // The ref must become an anchor (the definition existed, just empty)...
+    expect(out).toContain('href="#fn-1"');
+    // ...not be left as the literal "[^1]".
+    expect(out).not.toMatch(/\[\^1\]/);
+  });
+
   it("HTML-escapes definition text in attributes", () => {
     const out = processFootnotes('<p>x[^q]</p><p>[^q]: uses "quotes" &amp; stuff</p>');
     expect(out).toContain("data-fn-text=\"uses &quot;quotes&quot; &amp;amp; stuff\"");

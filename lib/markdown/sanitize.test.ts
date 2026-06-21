@@ -22,6 +22,20 @@ describe("sanitizeHtml (text-only blog)", () => {
     expect(out).toContain("youtube-nocookie.com/embed/x");
   });
 
+  it("drops an iframe whose src is not an allow-listed embed host", () => {
+    const out = sanitizeHtml('<p>x</p><iframe src="https://evil.example/frame"></iframe><p>y</p>');
+    expect(out).not.toContain("<iframe");
+    expect(out).not.toContain("evil.example");
+    expect(out).toContain("x");
+    expect(out).toContain("y");
+  });
+
+  it("keeps a CodePen embed iframe", () => {
+    const out = sanitizeHtml('<iframe src="https://codepen.io/u/embed/abc"></iframe>');
+    expect(out).toContain("<iframe");
+    expect(out).toContain("codepen.io/u/embed/abc");
+  });
+
   it("keeps ordinary text formatting", () => {
     const out = sanitizeHtml("<p><strong>Bold</strong> and <em>italic</em></p>");
     expect(out).toContain("<strong>Bold</strong>");

@@ -3,10 +3,19 @@
 /** HTML-escape (server-safe; mirrors B.esc / B.xmlEsc). */
 export function esc(s: string | null | undefined): string {
   return (s ?? "")
+    // Strip XML-1.0-illegal C0 control chars (keep tab/LF/CR) so a stray byte in a
+    // title/excerpt can't make the RSS/Atom feed un-parseable; harmless for HTML.
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/** Safe ISO-8601 timestamp for a <time dateTime>; undefined when the date is invalid. */
+export function isoDate(d: string | number | Date): string | undefined {
+  const date = new Date(d);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
 /** "N min read" from raw text (B.readingTime). */

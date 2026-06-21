@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getArticlesByTag } from "@/lib/queries/articles";
+import { getArticlesByTag, getTagCount } from "@/lib/queries/articles";
+import { CATEGORY_PAGE_SIZE } from "@/lib/constants";
 import ArticleCardV2 from "@/components/ArticleCardV2";
 import FeedAnimations from "@/components/FeedAnimations";
+import FeedLoadMore from "@/components/FeedLoadMore";
 
 export const revalidate = 300;
 
@@ -19,7 +21,11 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function TagPage({ params }: Params) {
   const { tag } = await params;
-  const articles = await getArticlesByTag(tag);
+  const [articles, total] = await Promise.all([
+    getArticlesByTag(tag, CATEGORY_PAGE_SIZE, 0),
+    getTagCount(tag),
+  ]);
+  const hasMore = total > articles.length;
 
   return (
     <div className="lb-wrap" style={{ maxWidth: 900 }}>
@@ -40,7 +46,7 @@ export default async function TagPage({ params }: Params) {
           #{tag}
         </h1>
         <p className="lb-feed-sub">
-          {articles.length} {articles.length === 1 ? "ARTICLE" : "ARTICLES"}
+          {total.toLocaleString()} {total === 1 ? "ARTICLE" : "ARTICLES"}
         </p>
         <div className="lb-feed-line" aria-hidden="true" />
       </header>
@@ -52,11 +58,18 @@ export default async function TagPage({ params }: Params) {
             No articles found with this tag.
           </div>
         ) : (
-          <div className="lb-card-grid">
-            {articles.map((a, idx) => (
-              <ArticleCardV2 key={a.id} a={a} idx={idx} />
-            ))}
-          </div>
+          <>
+            <div className="lb-card-grid">
+              {articles.map((a, idx) => (
+                <ArticleCardV2 key={a.id} a={a} idx={idx} />
+              ))}
+            </div>
+            <FeedLoadMore
+              tag={tag}
+              initialSlugs={articles.map((a) => a.slug)}
+              hasMore={hasMore}
+            />
+          </>
         )}
       </main>
       <FeedAnimations />

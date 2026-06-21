@@ -27,11 +27,14 @@ export default function NewsletterSignup() {
         setStatus({ t: "You're already subscribed. 🎉", err: false });
         return;
       }
-      await fetch("/api/newsletter/confirm", {
+      const confirmRes = await fetch("/api/newsletter/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), token: data }),
       });
+      // fetch only rejects on a network error, not on 4xx/5xx — check the status so a
+      // failed send (e.g. Resend down) shows an error instead of a false "check your inbox".
+      if (!confirmRes.ok) throw new Error("Couldn't send the confirmation email. Please try again in a moment.");
       setStatus({ t: "Almost there — check your inbox to confirm. 📬", err: false });
       setEmail("");
       setJob("");
