@@ -8,8 +8,7 @@
 // SUMMARY_API_URL / SUMMARY_API_KEY / SUMMARY_MODEL to point at a different
 // OpenAI-compatible provider (e.g. Z.ai GLM).
 import { NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { ADMIN_UUID } from "@/lib/constants";
+import { isAdminUser } from "@/lib/auth/require-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,20 +33,8 @@ function json(data: unknown, status: number) {
   });
 }
 
-async function isAdmin(): Promise<boolean> {
-  try {
-    const sb = await createClient();
-    const {
-      data: { user },
-    } = await sb.auth.getUser();
-    return user?.id === ADMIN_UUID;
-  } catch {
-    return false;
-  }
-}
-
 export async function POST(req: NextRequest) {
-  if (!(await isAdmin())) return json({ error: "Unauthorized" }, 401);
+  if (!(await isAdminUser())) return json({ error: "Unauthorized" }, 401);
   if (!SUMMARY_API_KEY) return json({ error: "Summary service not configured" }, 503);
 
   let body: { title?: string; content?: string };

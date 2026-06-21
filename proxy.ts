@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { ADMIN_UUID } from "@/lib/constants";
+import { isAdminId } from "@/lib/auth/is-admin";
 
 // Refreshes the Supabase session cookie and guards /admin/* (except /admin/login):
 // only the admin user (matching the RLS UUID) may enter.
@@ -31,7 +31,7 @@ export async function proxy(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   if (path.startsWith("/admin") && path !== "/admin/login") {
-    if (!user || user.id !== ADMIN_UUID) {
+    if (!isAdminId(user?.id)) {
       const url = request.nextUrl.clone();
       url.pathname = "/admin/login";
       return NextResponse.redirect(url);

@@ -3,21 +3,12 @@
 // (for the LinkedIn action / cron).
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
-import { ADMIN_UUID } from "@/lib/constants";
+import { isAdminUser } from "@/lib/auth/require-admin";
 
 async function authorized(req: NextRequest): Promise<boolean> {
   const secret = req.headers.get("x-revalidate-secret");
   if (secret && process.env.REVALIDATE_SECRET && secret === process.env.REVALIDATE_SECRET) return true;
-  try {
-    const sb = await createClient();
-    const {
-      data: { user },
-    } = await sb.auth.getUser();
-    return user?.id === ADMIN_UUID;
-  } catch {
-    return false;
-  }
+  return isAdminUser();
 }
 
 export async function POST(req: NextRequest) {
