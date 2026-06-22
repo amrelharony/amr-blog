@@ -104,9 +104,13 @@ curl -X POST https://blog.amrelharony.com/api/articles \
   "published": true,
   "scheduled_at": null,
   "linkedin_posted": false,
+  "pdf_url": null,
+  "pdf_name": null,
   "warnings": []
 }
 ```
+
+(`pdf_url`/`pdf_name` are non-null only when you attach a PDF — see below.)
 
 ### Errors
 
@@ -114,11 +118,44 @@ curl -X POST https://blog.amrelharony.com/api/articles \
 
 | status | when |
 |--------|------|
-| `400`  | invalid JSON, missing `title`/`content`, bad `category`/`status`, `schedule` without a valid future `scheduled_at`, un-sluggable title |
+| `400`  | invalid JSON / invalid `payload` JSON, missing `title`/`content`, bad `category`/`status`, `schedule` without a valid future `scheduled_at`, un-sluggable title, empty PDF |
 | `401`  | missing/incorrect API key |
 | `409`  | an explicit `slug` is already in use |
-| `413`  | body larger than ~1 MB |
+| `413`  | JSON body larger than ~1 MB, or PDF larger than 25 MB |
+| `415`  | the uploaded file is not a valid PDF (magic bytes checked) |
 | `500`  | server misconfiguration or DB error |
+| `502`  | PDF upload to storage failed |
+
+## Attaching a PDF
+
+To attach a generated PDF that renders **inline** in the article (mobile-friendly
+viewer, with download / open-in-new-tab links), send the request as
+`multipart/form-data` instead of JSON:
+
+- a **`payload`** part — the *exact same JSON* you'd normally send (all the fields above), and
+- a **`pdf`** part — the PDF file itself.
+
+```bash
+curl -X POST https://blog.amrelharony.com/api/articles \
+  -H "Authorization: Bearer $ARTICLES_API_KEY" \
+  -F 'payload={"title":"Q2 Market Report","category":"Business","status":"publish","content":"## Highlights\n\nFull analysis attached below.\n"};type=application/json' \
+  -F 'pdf=@./q2-report.pdf;type=application/pdf'
+```
+
+The response is the same as above, with `pdf_url` (the hosted URL) and `pdf_name`
+(your filename) populated.
+
+**Rules**
+- One PDF per article. Max **25 MB**. Must be a real PDF — the server checks the
+  file's magic bytes, so a mislabeled file is rejected with `415`.
+- Sending `multipart/form-data` **without** a `pdf` part behaves exactly like a
+  normal JSON submission (no PDF attached).
+- The no-images rule for the **article body** still applies. The PDF is a separate
+  hosted asset rendered *outside* the article text, so it doesn't change that.
+
+> **Privacy:** uploaded PDFs live in a **public** bucket — anyone with the URL can
+> view or download them (same model as a published article). Don't upload anything
+> confidential.
 
 ## Server configuration (one-time)
 

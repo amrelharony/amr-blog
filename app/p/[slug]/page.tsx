@@ -17,6 +17,7 @@ import ArticleToolbar from "@/components/ArticleToolbar";
 import ReadingTracker from "@/components/ReadingTracker";
 import CollectionsManager from "@/components/CollectionsManager";
 import Annotations from "@/components/Annotations";
+import PdfViewer from "@/components/PdfViewer";
 
 export const revalidate = 300;
 
@@ -224,6 +225,8 @@ export default async function ArticlePage({ params }: Params) {
             itemProp="articleBody"
             dangerouslySetInnerHTML={{ __html: html }}
           />
+
+          {a.pdf_url && <PdfViewer url={a.pdf_url} name={a.pdf_name} />}
 
           {a.source_url && (
             <p className="lb-source-note lb-reveal">

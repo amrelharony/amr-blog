@@ -5,6 +5,12 @@
 // lib/markdown/sanitize.ts. Content is therefore stored RAW here, mirroring the
 // admin editor (app/admin/write/page.tsx).
 //
+// Two request shapes:
+//   - application/json: the article fields (back-compatible original contract).
+//   - multipart/form-data: a `payload` field holding that SAME JSON, plus an
+//     optional `pdf` file part. The PDF is hosted in a public Supabase Storage
+//     bucket and rendered inline on the article page.
+//
 // Auth: Authorization: Bearer <ARTICLES_API_KEY> (or x-articles-api-key header).
 // Writes run through the service-role client (lib/supabase/service.ts) because the
 // request has no admin session.
@@ -21,8 +27,12 @@ export const dynamic = "force-dynamic";
 
 const MAX_TITLE = 200;
 const MAX_BODY_BYTES = 1_000_000; // ~1 MB of JSON — generous for very long articles
+const MAX_PDF_BYTES = 25 * 1024 * 1024; // 25 MB
+const PDF_BUCKET = "article-pdfs";
 const STATUSES = ["draft", "publish", "schedule"] as const;
 type Status = (typeof STATUSES)[number];
+
+type PdfUpload = { buffer: Buffer; name: string };
 
 function fail(error: string, status: number, field?: string) {
   return NextResponse.json({ ok: false, error, ...(field ? { field } : {}) }, { status });
@@ -52,25 +62,67 @@ function normTags(v: unknown): string[] {
   return [];
 }
 
+/** Download filename for the viewer: basename only, trimmed, length-capped. */
+function safeName(name: string): string {
+  const base = (name || "").split(/[\\/]/).pop() || "";
+  return base.trim().slice(0, 120) || "document.pdf";
+}
+
 export async function POST(req: NextRequest) {
   // 1. Auth
-  if (!validKey(presentedKey(req))) {
-    return fail("Unauthorized", 401);
-  }
+  if (!validKey(presentedKey(req))) return fail("Unauthorized", 401);
 
-  // 2. Read + size-cap + parse body
-  const raw = await req.text();
-  if (Buffer.byteLength(raw, "utf8") > MAX_BODY_BYTES) {
-    return fail("Request body too large", 413);
-  }
+  // 2. Parse the body (+ optional PDF) by content-type. The JSON branch is
+  //    byte-for-byte the original behavior; multipart adds the PDF.
+  const ct = (req.headers.get("content-type") || "").toLowerCase();
   let body: Record<string, unknown>;
-  try {
-    body = JSON.parse(raw || "{}");
-    if (typeof body !== "object" || body === null || Array.isArray(body)) throw new Error("not an object");
-  } catch {
-    return fail("Invalid JSON body", 400);
+  let pdf: PdfUpload | null = null;
+
+  if (ct.includes("multipart/form-data")) {
+    let form: FormData;
+    try {
+      form = await req.formData();
+    } catch {
+      return fail("Invalid multipart body", 400);
+    }
+    const payloadRaw = form.get("payload");
+    try {
+      body = JSON.parse(typeof payloadRaw === "string" ? payloadRaw : "{}");
+      if (typeof body !== "object" || body === null || Array.isArray(body)) throw new Error("not an object");
+    } catch {
+      return fail("invalid payload JSON", 400, "payload");
+    }
+
+    const file = form.get("pdf");
+    if (file && typeof file !== "string") {
+      // Validate before any DB write: size, then authoritative magic bytes
+      // (client Content-Type is advisory only).
+      if (file.size === 0) return fail("empty PDF", 400, "pdf");
+      if (file.size > MAX_PDF_BYTES) return fail("PDF too large (max 25MB)", 413, "pdf");
+      const ab = await file.arrayBuffer();
+      const head = new Uint8Array(ab.slice(0, 5));
+      const isPdf =
+        head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46 && head[4] === 0x2d; // "%PDF-"
+      if (!isPdf) return fail("file is not a valid PDF", 415, "pdf");
+      pdf = { buffer: Buffer.from(ab), name: safeName(file.name) };
+    }
+  } else {
+    const raw = await req.text();
+    if (Buffer.byteLength(raw, "utf8") > MAX_BODY_BYTES) return fail("Request body too large", 413);
+    try {
+      body = JSON.parse(raw || "{}");
+      if (typeof body !== "object" || body === null || Array.isArray(body)) throw new Error("not an object");
+    } catch {
+      return fail("Invalid JSON body", 400);
+    }
   }
 
+  return ingest(body, pdf);
+}
+
+/** Validate the article fields, insert the row, optionally attach a PDF, and
+ *  revalidate. Shared by the JSON and multipart paths. */
+async function ingest(body: Record<string, unknown>, pdf: PdfUpload | null): Promise<NextResponse> {
   // 3. Required fields
   const title = typeof body.title === "string" ? body.title.trim() : "";
   if (!title) return fail("title is required", 400, "title");
@@ -131,7 +183,7 @@ export async function POST(req: NextRequest) {
     return fail("Server not configured for article ingest", 500);
   }
 
-  // 9. Resolve slug collisions. Explicit slug -> 409. Auto slug -> md5/random suffix.
+  // 9. Resolve slug collisions. Explicit slug -> 409. Auto slug -> random suffix.
   let slug = baseSlug;
   if (explicitSlug) {
     if (await slugTakenServer(sb, slug, "")) {
@@ -146,7 +198,7 @@ export async function POST(req: NextRequest) {
 
   // 10. Insert — row shape mirrors save() in app/admin/write/page.tsx. created_at /
   //     updated_at are left to DB defaults so a published article stays fresh for
-  //     the LinkedIn window.
+  //     the LinkedIn window. pdf_url/pdf_name are set after upload (step 11).
   const row = {
     title,
     slug,
@@ -166,18 +218,41 @@ export async function POST(req: NextRequest) {
     linkedin_posted: !linkedin,
   };
 
-  const { data, error } = await sb
-    .from("longform_articles")
-    .insert(row)
-    .select("id,slug")
-    .single();
-
+  const { data, error } = await sb.from("longform_articles").insert(row).select("id,slug").single();
   if (error || !data) {
     if (error?.code === "23505") return fail("slug already in use", 409, "slug"); // unique violation backstop
     return fail("Failed to save article", 500);
   }
 
-  // 11. Revalidate ISR caches when the article is visible now. Drafts and future
+  // 11. Attach the PDF, if any. Insert-first/upload-after means a partial failure
+  //     never orphans a Storage object, and the row is rolled back on error so we
+  //     never leave an article pointing at a missing PDF. The path uses the row id
+  //     (server-generated) so the client can't influence it (no traversal).
+  let pdfUrl: string | null = null;
+  let pdfName: string | null = null;
+  if (pdf) {
+    const path = `${data.id}/${randomBytes(8).toString("hex")}.pdf`;
+    const up = await sb.storage
+      .from(PDF_BUCKET)
+      .upload(path, pdf.buffer, { contentType: "application/pdf", upsert: false });
+    if (up.error) {
+      await sb.from("longform_articles").delete().eq("id", data.id);
+      return fail("PDF upload failed", 502, "pdf");
+    }
+    pdfUrl = sb.storage.from(PDF_BUCKET).getPublicUrl(path).data.publicUrl;
+    pdfName = pdf.name;
+    const upd = await sb
+      .from("longform_articles")
+      .update({ pdf_url: pdfUrl, pdf_name: pdfName })
+      .eq("id", data.id);
+    if (upd.error) {
+      await sb.storage.from(PDF_BUCKET).remove([path]);
+      await sb.from("longform_articles").delete().eq("id", data.id);
+      return fail("Failed to save article PDF", 500, "pdf");
+    }
+  }
+
+  // 12. Revalidate ISR caches when the article is visible now. Drafts and future
   //     schedules are refreshed later by the db-keepalive publish cron.
   if (published) {
     revalidatePath("/");
@@ -201,6 +276,8 @@ export async function POST(req: NextRequest) {
       published,
       scheduled_at: scheduledAt,
       linkedin_posted: !linkedin,
+      pdf_url: pdfUrl,
+      pdf_name: pdfName,
       warnings,
     },
     { status: 201 },

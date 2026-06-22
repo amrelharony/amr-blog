@@ -3146,6 +3146,88 @@ body:has(.challenge-hud.show) .lb-reading-panel {
   border: none
 }
 
+/* â”€â”€ Inline PDF viewer (PdfViewer.tsx) â”€â”€ */
+.lb-pdf-embed {
+  margin: 32px 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  transition: border-color .6s
+}
+
+.lb-pdf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--glow);
+  font-size: 14px;
+  color: var(--text);
+  transition: background .6s, border-color .6s, color .6s
+}
+
+.lb-pdf-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--sub)
+}
+
+.lb-pdf-actions {
+  display: flex;
+  gap: 16px;
+  flex: none
+}
+
+.lb-pdf-actions a {
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap
+}
+
+.lb-pdf-actions a:hover {
+  text-shadow: 0 0 8px var(--glow)
+}
+
+.lb-pdf-status {
+  padding: 28px 14px;
+  text-align: center;
+  color: var(--sub)
+}
+
+.lb-pdf-pages {
+  display: block;
+  background: #525659
+}
+
+.lb-pdf-page {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 auto
+}
+
+.lb-pdf-page + .lb-pdf-page {
+  margin-top: 10px
+}
+
+@media (max-width: 768px) {
+  .lb-pdf-embed { margin: 24px 0 }
+}
+
+@media (max-width: 600px) {
+  .lb-pdf-toolbar { flex-direction: column; align-items: flex-start; gap: 8px }
+  .lb-pdf-actions { gap: 20px }
+}
+
 /* â”€â”€ Prism Token Colors (Dark Mode) â”€â”€ */
 .lb-content pre .token.comment,
 .lb-content pre .token.prolog,
