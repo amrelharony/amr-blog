@@ -63,6 +63,15 @@ function safeName(name: string): string {
   return base.trim().slice(0, 120) || "document.pdf";
 }
 
+/** decodeURIComponent that never throws on a malformed sequence. */
+function decodeBasename(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
 export async function POST(req: NextRequest) {
   // 1. Auth
   if (!validKey(presentedKey(req))) return fail("Unauthorized", 401);
@@ -142,11 +151,12 @@ async function ingest(body: Record<string, unknown>): Promise<NextResponse> {
       return fail("pdf_url must be a valid URL", 400, "pdf_url");
     }
     if (parsed.protocol !== "https:") return fail("pdf_url must be an https URL", 400, "pdf_url");
-    pdfUrl = candidate;
+    if (!parsed.hostname) return fail("pdf_url must include a host", 400, "pdf_url");
+    pdfUrl = parsed.href; // store the normalized absolute URL, not the raw caller string
     pdfName =
       typeof body.pdf_name === "string" && body.pdf_name.trim() !== ""
         ? safeName(body.pdf_name)
-        : safeName(parsed.pathname.split("/").pop() || "");
+        : safeName(decodeBasename(parsed.pathname.split("/").pop() || ""));
   }
 
   // 8. Slug — derive from title unless an explicit slug is given
@@ -201,9 +211,24 @@ async function ingest(body: Record<string, unknown>): Promise<NextResponse> {
     pdf_name: pdfName,
   };
 
-  const { data, error } = await sb.from("longform_articles").insert(row).select("id,slug").single();
+  // Insert. For an AUTO-derived slug, a 23505 unique-violation (a collision the
+  // pre-check missed, or a check->insert TOCTOU race) is retried with a fresh
+  // suffix. An EXPLICIT slug surfaces 409 — that's the caller's to fix.
+  let data: { id: string; slug: string } | null = null;
+  let error: { code?: string } | null = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await sb.from("longform_articles").insert(row).select("id,slug").single();
+    data = res.data;
+    error = res.error;
+    if (!error) break;
+    if (error.code === "23505" && !explicitSlug && attempt < 3) {
+      row.slug = (baseSlug.slice(0, 75) + "-" + randomBytes(3).toString("hex")).slice(0, 80);
+      continue;
+    }
+    break;
+  }
   if (error || !data) {
-    if (error?.code === "23505") return fail("slug already in use", 409, "slug"); // unique violation backstop
+    if (error?.code === "23505") return fail("slug already in use", 409, "slug"); // unique-constraint backstop
     return fail("Failed to save article", 500);
   }
 

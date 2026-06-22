@@ -21,7 +21,7 @@ header.) Max request body ≈ 1 MB.
 |----------------|--------------------|------------------|-------|
 | `title`        | **yes**            | —                | 1–200 chars |
 | `content`      | **yes**            | —                | raw GFM markdown (see below) |
-| `slug`         | no                 | derived from title | URL segment `/p/<slug>`. If you pass one that's taken → `409`. If omitted, a unique slug is generated. |
+| `slug`         | no                 | derived from title | URL segment `/p/<slug>`. If you pass one that's taken → `409`. If omitted, a slug is generated from the title (a short random suffix is appended on collision). |
 | `excerpt`      | no                 | `""`             | short summary; also used in the LinkedIn share text |
 | `tags`         | no                 | `[]`             | array `["ai","fintech"]` or comma string `"ai, fintech"` |
 | `category`     | no                 | none             | exactly one of `Fintech`, `Leadership`, `Business`, `Tech` (case-insensitive) — or omit |
@@ -121,8 +121,8 @@ curl -X POST https://blog.amrelharony.com/api/articles \
 | status | when |
 |--------|------|
 | `400`  | invalid JSON, missing `title`/`content`, bad `category`/`status`, `schedule` without a valid future `scheduled_at`, un-sluggable title, or `pdf_url` that isn't a valid `https` URL |
-| `401`  | missing/incorrect API key |
-| `409`  | an explicit `slug` is already in use |
+| `401`  | missing/incorrect API key (or the server's `ARTICLES_API_KEY` isn't set) |
+| `409`  | the slug is already in use — an explicit `slug` you sent, or (very rarely) an auto-generated one after retries are exhausted; for an auto slug, just retry |
 | `413`  | body larger than ~1 MB |
 | `500`  | server misconfiguration or DB error |
 
