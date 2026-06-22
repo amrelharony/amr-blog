@@ -36,7 +36,14 @@ export function sanitizeHtml(html: string): string {
       "loading",
       "decoding",
     ],
-    // Text-only blog: strip any images (and their figure wrappers) from content.
-    FORBID_TAGS: ["img", "figure", "figcaption"],
+    // Text-only blog: strip images + their figure wrappers. Also strip <style>,
+    // <svg>, and <math> — the blog never uses them in content, and they're CSS-
+    // injection / mXSS-wrapper vectors (e.g. an SVG-namespaced <style>@import).
+    FORBID_TAGS: ["img", "figure", "figcaption", "style", "svg", "math"],
+    // Drop the inline `style` attribute. jsdom has no CSS parser, so DOMPurify
+    // passes style strings through verbatim — a `position:fixed;inset:0` overlay
+    // would otherwise survive and enable a full-viewport clickjacking/phishing
+    // layer. The blog styles content with its own CSS classes, never inline styles.
+    FORBID_ATTR: ["style"],
   });
 }

@@ -31,7 +31,7 @@ header.) Max request body ≈ 1 MB.
 | `series_order` | no                 | `0`              | order within the series |
 | `tldr`         | no                 | none             | one-line summary shown on the article (max 500 chars) |
 | `status`       | no                 | `"draft"`        | `draft` \| `publish` \| `schedule` |
-| `scheduled_at` | only if `schedule` | —                | future ISO-8601, e.g. `2026-07-01T09:00:00Z` |
+| `scheduled_at` | only if `schedule` | —                | future ISO-8601 within ~2 years, e.g. `2026-07-01T09:00:00Z` |
 | `linkedin`     | no                 | `false`          | `true` also distributes to LinkedIn (see below) |
 | `pdf_url`      | no                 | none             | HTTPS URL of a PDF you host (see "Attaching a PDF") — rendered inline |
 | `pdf_name`     | no                 | from `pdf_url`   | download label for the PDF; defaults to the URL's filename |

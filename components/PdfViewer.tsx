@@ -96,6 +96,8 @@ export default function PdfViewer({ url, name }: { url: string; name?: string | 
         if (cancelled) return; // unmounted during the dynamic import
         pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
+        // pdfjs v6 is eval-free and runs PDF scripting OFF by default, so a
+        // malicious agent-hosted PDF can't execute JS in the reader's page.
         loadingTask = pdfjs.getDocument({ url });
         doc = await loadingTask.promise;
         if (cancelled) return;

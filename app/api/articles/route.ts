@@ -34,6 +34,7 @@ const MAX_TLDR = 500;
 const MAX_SERIES = 200;
 const MAX_TAG = 50;
 const MAX_TAGS = 20;
+const MAX_SCHEDULE_MS = 2 * 365 * 24 * 60 * 60 * 1000; // schedule at most ~2 years out
 const STATUSES = ["draft", "publish", "schedule"] as const;
 type Status = (typeof STATUSES)[number];
 
@@ -152,6 +153,9 @@ async function ingest(body: Record<string, unknown>): Promise<NextResponse> {
     const d = new Date(String(body.scheduled_at));
     if (Number.isNaN(d.getTime())) return fail("scheduled_at must be a valid ISO-8601 date", 400, "scheduled_at");
     if (d.getTime() <= Date.now()) return fail("scheduled_at must be in the future", 400, "scheduled_at");
+    if (d.getTime() > Date.now() + MAX_SCHEDULE_MS) {
+      return fail("scheduled_at is too far in the future (max ~2 years)", 400, "scheduled_at");
+    }
     scheduledAt = d.toISOString();
   }
 
@@ -177,6 +181,10 @@ async function ingest(body: Record<string, unknown>): Promise<NextResponse> {
     return fail(`series_name must be ${MAX_SERIES} characters or fewer`, 400, "series_name");
   }
   const tags = normTags(body.tags).map((t) => t.slice(0, MAX_TAG)).slice(0, MAX_TAGS);
+  // Coerce series_order to a bounded non-negative integer (the column is integer;
+  // floats / Infinity / huge values would otherwise error or truncate at the DB).
+  const so = Math.trunc(Number(body.series_order));
+  const seriesOrder = Number.isFinite(so) && so > 0 ? Math.min(so, 100000) : 0;
 
   // 8. Optional URLs — validate + normalize. pdf_url/cover_image must be https
   //    (pdf renders client-side; cover_image is fetched server-side by the LinkedIn
@@ -238,7 +246,7 @@ async function ingest(body: Record<string, unknown>): Promise<NextResponse> {
     category,
     source_url: sourceUrl,
     series_name: seriesName,
-    series_order: Number(body.series_order) || 0,
+    series_order: seriesOrder,
     tldr,
     published,
     scheduled_at: scheduledAt,
