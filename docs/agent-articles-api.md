@@ -33,6 +33,8 @@ header.) Max request body ≈ 1 MB.
 | `status`       | no                 | `"draft"`        | `draft` \| `publish` \| `schedule` |
 | `scheduled_at` | only if `schedule` | —                | future ISO-8601, e.g. `2026-07-01T09:00:00Z` |
 | `linkedin`     | no                 | `false`          | `true` also distributes to LinkedIn (see below) |
+| `pdf_url`      | no                 | none             | HTTPS URL of a PDF you host (see "Attaching a PDF") — rendered inline |
+| `pdf_name`     | no                 | from `pdf_url`   | download label for the PDF; defaults to the URL's filename |
 
 ### `status`
 - `draft` — saved, not public. Review and publish it later from the admin panel.
@@ -118,44 +120,63 @@ curl -X POST https://blog.amrelharony.com/api/articles \
 
 | status | when |
 |--------|------|
-| `400`  | invalid JSON / invalid `payload` JSON, missing `title`/`content`, bad `category`/`status`, `schedule` without a valid future `scheduled_at`, un-sluggable title, empty PDF |
+| `400`  | invalid JSON, missing `title`/`content`, bad `category`/`status`, `schedule` without a valid future `scheduled_at`, un-sluggable title, or `pdf_url` that isn't a valid `https` URL |
 | `401`  | missing/incorrect API key |
 | `409`  | an explicit `slug` is already in use |
-| `413`  | JSON body larger than ~1 MB, or PDF larger than 25 MB |
-| `415`  | the uploaded file is not a valid PDF (magic bytes checked) |
+| `413`  | body larger than ~1 MB |
 | `500`  | server misconfiguration or DB error |
-| `502`  | PDF upload to storage failed |
 
 ## Attaching a PDF
 
-To attach a generated PDF that renders **inline** in the article (mobile-friendly
-viewer, with download / open-in-new-tab links), send the request as
-`multipart/form-data` instead of JSON:
-
-- a **`payload`** part — the *exact same JSON* you'd normally send (all the fields above), and
-- a **`pdf`** part — the PDF file itself.
+To attach a PDF that renders **inline** in the article (mobile-friendly viewer,
+with download / open-in-new-tab links): **host the PDF yourself on the VPS** and
+pass its URL as `pdf_url`. The blog stores the URL and the in-browser pdf.js viewer
+fetches it directly — there is no upload.
 
 ```bash
 curl -X POST https://blog.amrelharony.com/api/articles \
   -H "Authorization: Bearer $ARTICLES_API_KEY" \
-  -F 'payload={"title":"Q2 Market Report","category":"Business","status":"publish","content":"## Highlights\n\nFull analysis attached below.\n"};type=application/json' \
-  -F 'pdf=@./q2-report.pdf;type=application/pdf'
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Q2 Market Report",
+    "category": "Business",
+    "status": "publish",
+    "content": "## Highlights\n\nFull analysis in the PDF below.\n",
+    "pdf_url": "https://files.your-vps.com/pdfs/q2-report.pdf",
+    "pdf_name": "Q2-Market-Report.pdf"
+  }'
 ```
 
-The response is the same as above, with `pdf_url` (the hosted URL) and `pdf_name`
-(your filename) populated.
+The response includes the `pdf_url` and `pdf_name` you sent (omit `pdf_name` and
+it's derived from the URL's filename).
 
-**Rules**
-- One PDF per article. Max **25 MB**. Must be a real PDF — the server checks the
-  file's magic bytes, so a mislabeled file is rejected with `415`.
-- Sending `multipart/form-data` **without** a `pdf` part behaves exactly like a
-  normal JSON submission (no PDF attached).
+**Your VPS must serve the PDF with:**
+- **HTTPS** with a valid cert — the blog is HTTPS, so an `http://` URL is blocked as
+  mixed content. (`pdf_url` must start with `https://` or you get a `400`.)
+- a **CORS** header allowing the blog origin — the viewer fetches cross-origin:
+  `Access-Control-Allow-Origin: https://blog.amrelharony.com`
+- `Content-Type: application/pdf` (and ideally `Accept-Ranges: bytes`).
+
+nginx example:
+```nginx
+location /pdfs/ {
+    root /var/www;                      # serves /var/www/pdfs/*.pdf
+    default_type application/pdf;
+    add_header Access-Control-Allow-Origin  "https://blog.amrelharony.com" always;
+    add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
+    add_header Access-Control-Allow-Headers "Range" always;
+}
+```
+
+**Notes**
+- One PDF per article. Omit `pdf_url` for a normal text-only article.
 - The no-images rule for the **article body** still applies. The PDF is a separate
-  hosted asset rendered *outside* the article text, so it doesn't change that.
+  asset rendered *outside* the article text, so it doesn't change that.
 
-> **Privacy:** uploaded PDFs live in a **public** bucket — anyone with the URL can
-> view or download them (same model as a published article). Don't upload anything
-> confidential.
+> **Privacy:** the PDF URL is public — anyone with the link can view or download it
+> (same as a published article). Don't host anything confidential there. **Uptime:**
+> if the VPS is down or the file is removed, the viewer shows an error with the
+> download/open links still available.
 
 ## Server configuration (one-time)
 
