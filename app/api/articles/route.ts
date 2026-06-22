@@ -26,6 +26,14 @@ export const dynamic = "force-dynamic";
 
 const MAX_TITLE = 200;
 const MAX_BODY_BYTES = 1_000_000; // ~1 MB of JSON — generous for very long articles
+// Per-field caps. title+excerpt feed the LinkedIn auto-post (hard ~3000-char
+// commentary limit), so excerpt must stay small; the rest bound cached feed/search
+// payloads served to every reader.
+const MAX_EXCERPT = 500;
+const MAX_TLDR = 500;
+const MAX_SERIES = 200;
+const MAX_TAG = 50;
+const MAX_TAGS = 20;
 const STATUSES = ["draft", "publish", "schedule"] as const;
 type Status = (typeof STATUSES)[number];
 
@@ -70,6 +78,26 @@ function decodeBasename(s: string): string {
   } catch {
     return s;
   }
+}
+
+/** Validate + normalize an optional URL field. Returns the parsed URL (or null
+ *  when absent), or a 400 response. `allowHttp` permits http: in addition to https:. */
+function checkUrl(
+  raw: unknown,
+  field: string,
+  allowHttp: boolean,
+): { ok: true; url: URL | null } | { ok: false; res: NextResponse } {
+  if (raw == null || String(raw).trim() === "") return { ok: true, url: null };
+  let u: URL;
+  try {
+    u = new URL(String(raw).trim());
+  } catch {
+    return { ok: false, res: fail(`${field} must be a valid URL`, 400, field) };
+  }
+  const okProto = u.protocol === "https:" || (allowHttp && u.protocol === "http:");
+  if (!okProto) return { ok: false, res: fail(`${field} must be an ${allowHttp ? "http(s)" : "https"} URL`, 400, field) };
+  if (!u.hostname) return { ok: false, res: fail(`${field} must include a host`, 400, field) };
+  return { ok: true, url: u };
 }
 
 export async function POST(req: NextRequest) {
@@ -137,27 +165,37 @@ async function ingest(body: Record<string, unknown>): Promise<NextResponse> {
     );
   }
 
-  // 7. Optional PDF — the agent hosts it on its VPS and passes the URL. Must be
-  //    https (the blog is https; an http URL would be blocked as mixed content).
-  //    Validate only; the browser fetches it, so there's no server-side fetch.
-  let pdfUrl: string | null = null;
-  let pdfName: string | null = null;
-  if (body.pdf_url != null && String(body.pdf_url).trim() !== "") {
-    const candidate = String(body.pdf_url).trim();
-    let parsed: URL;
-    try {
-      parsed = new URL(candidate);
-    } catch {
-      return fail("pdf_url must be a valid URL", 400, "pdf_url");
-    }
-    if (parsed.protocol !== "https:") return fail("pdf_url must be an https URL", 400, "pdf_url");
-    if (!parsed.hostname) return fail("pdf_url must include a host", 400, "pdf_url");
-    pdfUrl = parsed.href; // store the normalized absolute URL, not the raw caller string
-    pdfName =
-      typeof body.pdf_name === "string" && body.pdf_name.trim() !== ""
-        ? safeName(body.pdf_name)
-        : safeName(decodeBasename(parsed.pathname.split("/").pop() || ""));
+  // 7. Bounded text fields. Caps stop agent input from breaking shared surfaces:
+  //    an oversized title+excerpt 422s the LinkedIn auto-post, and long values
+  //    bloat the cached RSS/feed payloads served to every reader.
+  const excerpt = typeof body.excerpt === "string" ? body.excerpt.trim() : "";
+  if (excerpt.length > MAX_EXCERPT) return fail(`excerpt must be ${MAX_EXCERPT} characters or fewer`, 400, "excerpt");
+  const tldr = typeof body.tldr === "string" && body.tldr.trim() !== "" ? body.tldr.trim() : null;
+  if (tldr && tldr.length > MAX_TLDR) return fail(`tldr must be ${MAX_TLDR} characters or fewer`, 400, "tldr");
+  const seriesName = typeof body.series_name === "string" && body.series_name.trim() !== "" ? body.series_name.trim() : null;
+  if (seriesName && seriesName.length > MAX_SERIES) {
+    return fail(`series_name must be ${MAX_SERIES} characters or fewer`, 400, "series_name");
   }
+  const tags = normTags(body.tags).map((t) => t.slice(0, MAX_TAG)).slice(0, MAX_TAGS);
+
+  // 8. Optional URLs — validate + normalize. pdf_url/cover_image must be https
+  //    (pdf renders client-side; cover_image is fetched server-side by the LinkedIn
+  //    cron, so pinning it to a real https URL matters); source_url may be http(s).
+  const pdfCheck = checkUrl(body.pdf_url, "pdf_url", false);
+  if (!pdfCheck.ok) return pdfCheck.res;
+  const coverCheck = checkUrl(body.cover_image, "cover_image", false);
+  if (!coverCheck.ok) return coverCheck.res;
+  const sourceCheck = checkUrl(body.source_url, "source_url", true);
+  if (!sourceCheck.ok) return sourceCheck.res;
+
+  const pdfUrl = pdfCheck.url ? pdfCheck.url.href : null;
+  const pdfName = pdfCheck.url
+    ? typeof body.pdf_name === "string" && body.pdf_name.trim() !== ""
+      ? safeName(body.pdf_name)
+      : safeName(decodeBasename(pdfCheck.url.pathname.split("/").pop() || ""))
+    : null;
+  const coverImage = coverCheck.url ? coverCheck.url.href : "";
+  const sourceUrl = sourceCheck.url ? sourceCheck.url.href : null;
 
   // 8. Slug — derive from title unless an explicit slug is given
   const explicitSlug = typeof body.slug === "string" && body.slug.trim() !== "";
@@ -193,17 +231,15 @@ async function ingest(body: Record<string, unknown>): Promise<NextResponse> {
   const row = {
     title,
     slug,
-    excerpt: typeof body.excerpt === "string" ? body.excerpt.trim() : "",
+    excerpt,
     content,
-    cover_image: typeof body.cover_image === "string" ? body.cover_image.trim() : "",
-    tags: normTags(body.tags),
+    cover_image: coverImage,
+    tags,
     category,
-    source_url:
-      typeof body.source_url === "string" && body.source_url.trim() !== "" ? body.source_url.trim() : null,
-    series_name:
-      typeof body.series_name === "string" && body.series_name.trim() !== "" ? body.series_name.trim() : null,
+    source_url: sourceUrl,
+    series_name: seriesName,
     series_order: Number(body.series_order) || 0,
-    tldr: typeof body.tldr === "string" && body.tldr.trim() !== "" ? body.tldr.trim() : null,
+    tldr,
     published,
     scheduled_at: scheduledAt,
     linkedin_posted: !linkedin,

@@ -22,14 +22,14 @@ header.) Max request body ≈ 1 MB.
 | `title`        | **yes**            | —                | 1–200 chars |
 | `content`      | **yes**            | —                | raw GFM markdown (see below) |
 | `slug`         | no                 | derived from title | URL segment `/p/<slug>`. If you pass one that's taken → `409`. If omitted, a slug is generated from the title (a short random suffix is appended on collision). |
-| `excerpt`      | no                 | `""`             | short summary; also used in the LinkedIn share text |
-| `tags`         | no                 | `[]`             | array `["ai","fintech"]` or comma string `"ai, fintech"` |
+| `excerpt`      | no                 | `""`             | short summary; also used in the LinkedIn share text. **Max 500 chars** (keep it short — title + excerpt must fit LinkedIn's post limit) |
+| `tags`         | no                 | `[]`             | array `["ai","fintech"]` or comma string `"ai, fintech"`. Max 20 tags, 50 chars each (extras trimmed) |
 | `category`     | no                 | none             | exactly one of `Fintech`, `Leadership`, `Business`, `Tech` (case-insensitive) — or omit |
-| `cover_image`  | no                 | `""`             | URL; used only as a LinkedIn thumbnail (never shown on the blog) |
-| `source_url`   | no                 | none             | attribution / canonical link |
-| `series_name`  | no                 | none             | groups posts into a series |
+| `cover_image`  | no                 | `""`             | **HTTPS** image URL; used only as a LinkedIn thumbnail (never shown on the blog) |
+| `source_url`   | no                 | none             | attribution / canonical link (`http` or `https`) |
+| `series_name`  | no                 | none             | groups posts into a series (max 200 chars) |
 | `series_order` | no                 | `0`              | order within the series |
-| `tldr`         | no                 | none             | one-line summary shown on the article |
+| `tldr`         | no                 | none             | one-line summary shown on the article (max 500 chars) |
 | `status`       | no                 | `"draft"`        | `draft` \| `publish` \| `schedule` |
 | `scheduled_at` | only if `schedule` | —                | future ISO-8601, e.g. `2026-07-01T09:00:00Z` |
 | `linkedin`     | no                 | `false`          | `true` also distributes to LinkedIn (see below) |
@@ -38,8 +38,10 @@ header.) Max request body ≈ 1 MB.
 
 ### `status`
 - `draft` — saved, not public. Review and publish it later from the admin panel.
-- `publish` — live immediately at `/p/<slug>`.
-- `schedule` — goes live automatically at `scheduled_at`.
+- `publish` — live immediately at `/p/<slug>` (the listings/sitemap/feed are refreshed on publish).
+- `schedule` — goes live at `scheduled_at`, flipped by a background cron. **For an exact go-live
+  time, prefer `publish`** (send the request when you want it live): scheduled publishing runs on
+  the deployment's cron cadence and can lag behind `scheduled_at`.
 
 ### `linkedin`
 LinkedIn distribution is handled by an existing hourly job, not by this endpoint.
@@ -120,7 +122,7 @@ curl -X POST https://blog.amrelharony.com/api/articles \
 
 | status | when |
 |--------|------|
-| `400`  | invalid JSON, missing `title`/`content`, bad `category`/`status`, `schedule` without a valid future `scheduled_at`, un-sluggable title, or `pdf_url` that isn't a valid `https` URL |
+| `400`  | invalid JSON, missing `title`/`content`, a field over its length cap (`title`/`excerpt`/`tldr`/`series_name`), bad `category`/`status`, `schedule` without a valid future `scheduled_at`, un-sluggable title, or a `pdf_url`/`cover_image`/`source_url` that isn't a valid URL of the allowed scheme |
 | `401`  | missing/incorrect API key (or the server's `ARTICLES_API_KEY` isn't set) |
 | `409`  | the slug is already in use — an explicit `slug` you sent, or (very rarely) an auto-generated one after retries are exhausted; for an auto slug, just retry |
 | `413`  | body larger than ~1 MB |
