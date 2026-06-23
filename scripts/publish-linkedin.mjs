@@ -100,7 +100,7 @@ async function refreshTokenIfNeeded() {
     const tokenData = await tokenRes.json();
     LI_TOKEN_VAR.value = tokenData.access_token;
     console.log('Token refreshed successfully. Update LINKEDIN_ACCESS_TOKEN secret with the new token.');
-    console.log(`::warning::LinkedIn access token was refreshed. Update the LINKEDIN_ACCESS_TOKEN repository secret. New token starts with: ${LI_TOKEN_VAR.value.substring(0, 12)}...`);
+    console.log('::warning::LinkedIn access token was refreshed. Update the LINKEDIN_ACCESS_TOKEN repository secret with the new token.');
   }
 }
 
@@ -108,12 +108,54 @@ async function uploadImageToLinkedIn(imageUrl) {
   if (!imageUrl) return null;
 
   console.log(`  Downloading image: ${imageUrl}`);
-  const imgRes = await fetch(imageUrl);
+  // Defense-in-depth SSRF/size guards (mirrors app/api/cover-proxy): the URL is
+  // agent-supplied. redirect:manual stops a 3xx bounce to an internal host; the
+  // AbortController bounds a slow host; the streamed cap stops an oversized/lying
+  // body from OOM-ing the runner; content-type must be an image.
+  const MAX_IMG_BYTES = 5 * 1024 * 1024;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  let imgRes;
+  try {
+    imgRes = await fetch(imageUrl, { signal: ctrl.signal, redirect: 'manual' });
+  } catch (e) {
+    clearTimeout(timer);
+    console.log(`  ✗ Image download failed: ${e.message}`);
+    return null;
+  }
+  clearTimeout(timer);
+  if (imgRes.type === 'opaqueredirect' || (imgRes.status >= 300 && imgRes.status < 400)) {
+    console.log(`  ✗ Image redirect not allowed`);
+    return null;
+  }
   if (!imgRes.ok) {
     console.log(`  ✗ Image download failed: ${imgRes.status} ${imgRes.statusText}`);
     return null;
   }
-  const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+  const ct = imgRes.headers.get('content-type') || '';
+  if (!/^image\//i.test(ct)) {
+    console.log(`  ✗ Not an image (content-type: ${ct || 'none'})`);
+    return null;
+  }
+  if (parseInt(imgRes.headers.get('content-length') || '0', 10) > MAX_IMG_BYTES) {
+    console.log(`  ✗ Image too large (>5MB)`);
+    return null;
+  }
+  const reader = imgRes.body.getReader();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_IMG_BYTES) {
+      try { await reader.cancel(); } catch {}
+      console.log(`  ✗ Image too large (>5MB)`);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const imgBuffer = Buffer.concat(chunks);
   console.log(`  ✓ Image downloaded: ${imgBuffer.length} bytes`);
 
   console.log(`  Initializing LinkedIn image upload (owner: ${LI_PERSON})...`);

@@ -137,3 +137,29 @@ describe("matchedTags", () => {
     expect(matchedTags(rows, "a", 2)).toEqual(["a1", "a2"]);
   });
 });
+
+describe("ReDoS guards (buildSnippet/stripMarkdown run on the full body for every /api/search hit)", () => {
+  const BUDGET_MS = 3000;
+  const N = 200_000;
+  const timed = (fn: () => void) => {
+    const t = performance.now();
+    fn();
+    return performance.now() - t;
+  };
+
+  it("buildSnippet is linear on a long '[' run", () => {
+    expect(timed(() => buildSnippet("[".repeat(N), "x"))).toBeLessThan(BUDGET_MS);
+  });
+
+  it("buildSnippet is linear on a long '![' run", () => {
+    expect(timed(() => buildSnippet("![".repeat(N), "x"))).toBeLessThan(BUDGET_MS);
+  });
+
+  it("stripMarkdown is linear on a long '<' run", () => {
+    expect(timed(() => stripMarkdown("<".repeat(N)))).toBeLessThan(BUDGET_MS);
+  });
+
+  it("stripMarkdown still strips a normal link to its text", () => {
+    expect(stripMarkdown("see [the docs](https://example.com/x) now")).toBe("see the docs now");
+  });
+});

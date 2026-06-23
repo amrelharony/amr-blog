@@ -9,6 +9,10 @@ export async function getThoughts(limit = 15, offset = 0): Promise<Thought[]> {
   const { data, error } = await sb
     .from("microblog")
     .select("*")
+    // Defense-in-depth: mirror the RLS predicate in the app layer so /thoughts
+    // doesn't depend on RLS alone (longform reads gate on .eq("published") too).
+    .eq("published", true)
+    .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`)
     .order("pinned", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
@@ -28,6 +32,8 @@ export async function searchThoughts(q: string, limit = 6): Promise<Thought[]> {
   const { data, error } = await sb
     .from("microblog")
     .select("*")
+    .eq("published", true)
+    .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`)
     .textSearch("content", q, { type: "websearch" })
     .order("created_at", { ascending: false })
     .limit(limit);
