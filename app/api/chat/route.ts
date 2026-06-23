@@ -86,6 +86,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Per-IP backstop: the session limit above is keyed on a freely-mintable anon uid,
+  // so it's bypassable by rotating sessions. Cap requests per client IP too. The RPC
+  // fails open (allows) if absent/erroring — the fail-open-vs-closed choice is left
+  // deliberate (availability over strictness). x-real-ip is set by the Vercel edge and
+  // isn't client-spoofable; a global ceiling on the OpenClaw key covers many-IP abuse.
+  const clientIp =
+    (req.headers.get("x-real-ip") || "").trim() ||
+    (req.headers.get("x-forwarded-for") || "").split(",")[0].trim();
+  const { data: ipAllowed, error: ipErr } = await supabase.rpc("check_chat_ip_rate_limit", {
+    p_ip: clientIp,
+  });
+  if (ipErr) console.warn("check_chat_ip_rate_limit failed (allowing request):", ipErr.message);
+  if (ipAllowed === false) {
+    return json({ error: "Rate limit exceeded" }, 429, { "Retry-After": "3600", ...rateLimitHeaders(limits) });
+  }
+
   // Server-side KB → context + categories (for follow-up chips on the client)
   const kb = matchQuery(message);
   const context = buildContext(kb);

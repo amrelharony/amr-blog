@@ -251,7 +251,7 @@ function PostCard({
   const ref = useRef<HTMLDivElement>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [showComments, setShowComments] = useState(false);
-  const [comments, setComments] = useState<{ id: string; author: string; content: string; created_at: string }[]>([]);
+  const [comments, setComments] = useState<{ id: string; author: string; content: string; created_at: string; author_id?: string | null }[]>([]);
   const [cInput, setCInput] = useState("");
   const sb = getBrowserClient();
 
@@ -289,9 +289,13 @@ function PostCard({
     const author = localStorage.getItem("_blog_commenter") || "Visitor";
     localStorage.setItem("_blog_commenter", author);
     await ensureAnonSession();
-    const { error } = await sb
-      .from("microblog_comments")
-      .insert({ post_id: post.id, author, content: cInput.trim() });
+    // Insert via the rate-limited/validated RPC, not a direct table write, so the
+    // per-author limit, length cap, and reserved-name block can't be bypassed.
+    const { error } = await sb.rpc("post_microblog_comment", {
+      p_post_id: post.id,
+      p_author: author,
+      p_content: cInput.trim(),
+    });
     if (!error) {
       setCInput("");
       await loadComments();
@@ -426,6 +430,11 @@ function PostCard({
                 <div key={c.id} className="blog-comment">
                   <span className="blog-comment-author">
                     {c.author}
+                    {/* Spoof-proof owner badge keyed on author_id (the admin auth.uid,
+                        already public in db/migrations), not the typed name. */}
+                    {c.author_id === "82dd079f-de7b-477b-84eb-6d34d9eded05" && (
+                      <span className="blog-comment-owner" title="Verified — Amr"> ✓</span>
+                    )}
                     <span className="blog-comment-time">{relTime(c.created_at)}</span>
                   </span>
                   <div style={{ whiteSpace: "pre-wrap" }}>{c.content}</div>
