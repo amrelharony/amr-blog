@@ -7,6 +7,7 @@ import {
   getRelatedArticles,
   getSeriesSiblings,
 } from "@/lib/queries/articles";
+import { renderArticleHtml } from "@/lib/markdown/parse";
 import { fmtDate, readingTime, isoDate } from "@/lib/format";
 import ArticleAnimations from "@/components/ArticleAnimations";
 import ArticleReader from "@/components/ArticleReader";
@@ -66,17 +67,7 @@ export default async function ArticlePage({ params }: Params) {
   const a = await getArticleBySlug(slug);
   if (!a) notFound();
 
-  let html: string;
-  try {
-    const { renderArticleHtml } = await import("@/lib/markdown/parse");
-    html = renderArticleHtml(a.content);
-  } catch (e) {
-    return (
-      <pre style={{ whiteSpace: "pre-wrap", padding: 24, fontSize: 12 }}>
-        {"DEBUG render error:\n" + ((e as Error)?.stack || String(e))}
-      </pre>
-    );
-  }
+  const html = renderArticleHtml(a.content);
   const url = `${siteUrl}/p/${a.slug}`;
   const shareText = a.title + (a.excerpt ? `\n\n${a.excerpt}` : "");
   const words = (a.content || "").split(/\s+/).filter(Boolean).length;
