@@ -28,6 +28,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored, minified worker copied from pdfjs-dist (see PdfViewer.tsx) — not ours to lint.
+    "public/pdf.worker.min.mjs",
   ]),
 ]);
 

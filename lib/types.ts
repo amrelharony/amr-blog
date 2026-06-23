@@ -23,6 +23,10 @@ export interface Article {
   series_order: number;
   /** AI-generated TL;DR, authored/reviewed in the admin editor (column `tldr`). */
   tldr: string | null;
+  /** Public Storage URL of an attached PDF, rendered inline by PdfViewer (NULL = none). */
+  pdf_url: string | null;
+  /** Original filename of the attached PDF, used as the viewer's download label. */
+  pdf_name: string | null;
 }
 
 /** Columns used by the feed/cards (no heavy `content`). */
