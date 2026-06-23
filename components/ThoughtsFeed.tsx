@@ -62,6 +62,9 @@ export default function ThoughtsFeed({ initial }: { initial: Thought[] }) {
     const { data } = await sb
       .from("microblog")
       .select("*")
+      // Match the RLS predicate at the app layer (consistent with getThoughts).
+      .eq("published", true)
+      .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`)
       .order("pinned", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1);
