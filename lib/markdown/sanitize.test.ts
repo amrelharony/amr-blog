@@ -61,4 +61,32 @@ describe("sanitizeHtml (text-only blog)", () => {
     expect(out).not.toContain("@import");
     expect(out).toContain("ok");
   });
+
+  // Allowlist sanitizers can over-strip — these assert legit rendered-markdown shapes
+  // (from lib/markdown/postprocess.ts) survive sanitization.
+  it("preserves links, lists, headings, code, blockquote, sup", () => {
+    const out = sanitizeHtml(
+      '<h2>Title</h2><p><a href="https://x.example">link</a> <code>x</code></p>' +
+        '<ul><li>one</li></ul><blockquote><p>q</p></blockquote><sup>1</sup>',
+    );
+    for (const frag of ["<h2>", '<a href="https://x.example"', "<code>", "<ul>", "<li>", "<blockquote>", "<sup>"]) {
+      expect(out).toContain(frag);
+    }
+  });
+
+  it("preserves GFM tables", () => {
+    const out = sanitizeHtml("<table><thead><tr><th>A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>");
+    for (const t of ["<table>", "<thead>", "<tbody>", "<tr>", "<th>", "<td>"]) expect(out).toContain(t);
+  });
+
+  it("preserves callout + footnote wrappers (class/id/data-fn attrs)", () => {
+    const callout = '<div class="callout callout-note"><div class="callout-title">ℹ️ NOTE</div><p>body</p></div>';
+    expect(sanitizeHtml(callout)).toContain('class="callout callout-note"');
+    const fnRef = '<sup><a href="#fn-1" class="lb-fn-ref" data-fn="1" data-fn-text="t">1</a></sup>';
+    const refOut = sanitizeHtml(fnRef);
+    expect(refOut).toContain('href="#fn-1"');
+    expect(refOut).toContain('data-fn="1"');
+    const fnItem = '<div class="lb-footnote-item" id="fn-1"><span class="lb-footnote-num">1.</span></div>';
+    expect(sanitizeHtml(fnItem)).toContain('id="fn-1"');
+  });
 });

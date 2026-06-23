@@ -43,7 +43,9 @@ async function renderMarkdown(text: string): Promise<string> {
       _marked = (s: string) => m.marked.parse(s, { async: false }) as string;
     }
     if (!_sanitize) {
-      const d = await import("isomorphic-dompurify");
+      // Client-side only (browser DOM) — plain dompurify, not isomorphic-dompurify
+      // (whose jsdom backend isn't needed here and breaks the serverless build).
+      const d = await import("dompurify");
       _sanitize = (s: string) => d.default.sanitize(s);
     }
     return _sanitize(_marked(text));

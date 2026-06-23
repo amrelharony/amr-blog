@@ -15,13 +15,6 @@ const baseSecurityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // isomorphic-dompurify (lib/markdown/sanitize.ts) pulls in jsdom, and jsdom's
-  // dynamic requires break when it's BUNDLED into the serverless function — the page
-  // module calls DOMPurify.addHook() at load, so jsdom is initialized the moment the
-  // route module loads. It works at build/dev/next-start (full node_modules) but the
-  // on-demand ISR render 500s on Vercel. Externalizing keeps them as runtime requires
-  // from the traced node_modules so jsdom initializes correctly in the lambda.
-  serverExternalPackages: ["isomorphic-dompurify", "jsdom"],
   async headers() {
     return [
       { source: "/:path*", headers: baseSecurityHeaders },
