@@ -38,6 +38,10 @@ export default function PdfViewer({ url, name }: { url: string; name?: string | 
     const rendered: boolean[] = [];
     const tasks = new Map<number, RenderTask>();
     const visible = new Set<number>();
+    // Pages reserved synchronously before their getPage() await, so a concurrent
+    // renderPage(n) during that await window bails at the guard instead of starting
+    // a duplicate render() on the same canvas (which throws + orphans the first task).
+    const inFlight = new Set<number>();
     // Cap DPR so a dpr=3 phone doesn't allocate ~2.25x the pixels per page.
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
@@ -66,27 +70,33 @@ export default function PdfViewer({ url, name }: { url: string; name?: string | 
     }
 
     async function renderPage(n: number) {
-      if (cancelled || !doc || rendered[n - 1] || tasks.has(n)) return;
+      if (cancelled || !doc || rendered[n - 1] || tasks.has(n) || inFlight.has(n)) return;
       const canvas = canvases[n - 1];
       if (!canvas) return;
-      const page = await doc.getPage(n).catch(() => null);
-      if (!page || cancelled || !visible.has(n)) return; // failed, or scrolled away while loading
-      const unscaled = page.getViewport({ scale: 1 });
-      const width = container?.clientWidth || 800;
-      const viewport = page.getViewport({ scale: (width / unscaled.width) * dpr });
-      canvas.style.aspectRatio = `${unscaled.width} / ${unscaled.height}`;
-      canvas.width = Math.floor(viewport.width);
-      canvas.height = Math.floor(viewport.height);
-      const task = page.render({ canvas, viewport });
-      tasks.set(n, task);
+      inFlight.add(n); // reserve BEFORE the first await so a concurrent call bails at the guard
       try {
-        await task.promise;
-        rendered[n - 1] = true;
-      } catch {
-        /* cancelled or failed — leave un-rendered */
+        const page = await doc.getPage(n).catch(() => null);
+        if (!page || cancelled || !visible.has(n)) return; // failed, or scrolled away while loading
+        const unscaled = page.getViewport({ scale: 1 });
+        const width = container?.clientWidth || 800;
+        const viewport = page.getViewport({ scale: (width / unscaled.width) * dpr });
+        canvas.style.aspectRatio = `${unscaled.width} / ${unscaled.height}`;
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        const task = page.render({ canvas, viewport });
+        tasks.set(n, task);
+        try {
+          await task.promise;
+          rendered[n - 1] = true;
+        } catch {
+          /* cancelled or failed — leave un-rendered */
+        } finally {
+          tasks.delete(n);
+          if (!cancelled && !visible.has(n)) release(n); // finished after it scrolled away
+        }
       } finally {
-        tasks.delete(n);
-        if (!cancelled && !visible.has(n)) release(n); // finished after it scrolled away
+        inFlight.delete(n); // cleared only here (NOT in release) — clearing on release
+        // would let a re-enter slip a 2nd render past the guard while this one awaits
       }
     }
 
