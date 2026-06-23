@@ -26,8 +26,7 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://blog.amrelharony.co
 type Params = { params: Promise<{ slug: string }> };
 
 export async function generateStaticParams() {
-  const slugs = await getAllPublishedSlugs();
-  return slugs.map((slug) => ({ slug }));
+  return []; // TEMP DEBUG — skip prerender so the local prod build is fast
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
