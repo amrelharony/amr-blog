@@ -6,6 +6,12 @@ on:
     - cron: '0 * * * *'
   workflow_dispatch:
 
+# Only one publish run at a time: linkedin_posted is the dedup guard, read then
+# written non-atomically, so overlapping runs (manual + scheduled) could double-post.
+concurrency:
+  group: publish-linkedin
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest

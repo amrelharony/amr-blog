@@ -85,6 +85,32 @@ function decodeBasename(s: string): string {
   }
 }
 
+/** Reject URLs whose host is a loopback / private / link-local / cloud-metadata
+ *  target, so an agent-supplied pdf_url/cover_image can't drive SSRF (the LinkedIn
+ *  cron fetches cover_image server-side; pdf_url is fetched by visitors' browsers).
+ *  Literal IPs + localhost-style names only — DNS-rebinding is caught at fetch time. */
+function isInternalHost(hostname: string): boolean {
+  let h = hostname.toLowerCase();
+  if (h.startsWith("[") && h.endsWith("]")) h = h.slice(1, -1); // strip IPv6 brackets
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return true;
+  if (h === "metadata.google.internal") return true;
+  if (h === "::1" || h === "::") return true;
+  if (h.startsWith("fe80:") || h.startsWith("fc") || h.startsWith("fd")) return true; // IPv6 link-local + ULA
+  const mapped = h.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/); // IPv4-mapped IPv6
+  const ipv4 = mapped ? mapped[1] : (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(h) ? h : null);
+  if (ipv4) {
+    const p = ipv4.split(".").map(Number);
+    if (p.some((n) => n > 255)) return false; // not a real v4 — let it fail at fetch
+    const [a, b] = p;
+    if (a === 0 || a === 127 || a === 10) return true; // this-host, loopback, private
+    if (a === 169 && b === 254) return true; // link-local incl. 169.254.169.254 metadata
+    if (a === 192 && b === 168) return true; // private
+    if (a === 172 && b >= 16 && b <= 31) return true; // private
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+  }
+  return false;
+}
+
 /** Validate + normalize an optional URL field. Returns the parsed URL (or null
  *  when absent), or a 400 response. `allowHttp` permits http: in addition to https:. */
 function checkUrl(
@@ -102,6 +128,9 @@ function checkUrl(
   const okProto = u.protocol === "https:" || (allowHttp && u.protocol === "http:");
   if (!okProto) return { ok: false, res: fail(`${field} must be an ${allowHttp ? "http(s)" : "https"} URL`, 400, field) };
   if (!u.hostname) return { ok: false, res: fail(`${field} must include a host`, 400, field) };
+  if (isInternalHost(u.hostname)) {
+    return { ok: false, res: fail(`${field} must not point to an internal/loopback address`, 400, field) };
+  }
   return { ok: true, url: u };
 }
 
