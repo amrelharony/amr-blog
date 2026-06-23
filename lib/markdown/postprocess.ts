@@ -6,7 +6,10 @@ import { esc } from "@/lib/format";
 /** Convert [!NOTE|TIP|WARNING|DANGER|IMPORTANT|CAUTION|QUOTE] blockquotes to callouts. */
 export function postProcessHtml(html: string): string {
   return html.replace(
-    /<blockquote>\s*<p>\[!(NOTE|TIP|WARNING|DANGER|IMPORTANT|CAUTION|QUOTE)\]\s*<br\s*\/?>\s*([\s\S]*?)<\/p>\s*<\/blockquote>/gi,
+    // Bounded quantifiers (\s{0,8}, body {0,20000}): an unbounded \s* gap before the
+    // lazy body backtracks quadratically on a <blockquote>+long-whitespace body with
+    // no close — same server-side/build ReDoS class as the embed regexes below.
+    /<blockquote>\s{0,8}<p>\[!(NOTE|TIP|WARNING|DANGER|IMPORTANT|CAUTION|QUOTE)\]\s{0,8}<br\s{0,8}\/?>\s{0,8}([\s\S]{0,20000}?)<\/p>\s{0,8}<\/blockquote>/gi,
     (_m, type: string, content: string) => {
       const t = type.toUpperCase();
       const icons: Record<string, string> = {
@@ -33,21 +36,24 @@ export function postProcessHtml(html: string): string {
 }
 
 /** Turn bare YouTube / X(Twitter) / CodePen links into embeds.
- *  Quantifiers are BOUNDED ({0,N}) on purpose: the unbounded `[^\s<]*` trailing a
- *  greedy id capture (e.g. `([\w-]+)…[^\s<]*`) caused quadratic ReDoS on a crafted
- *  body (e.g. `<p>https://codepen.io/u/pen/aaaa…` with no close), which renders
- *  server-side and at build. Bounds are generous for real share URLs. */
+ *  EVERY quantifier is BOUNDED on purpose — these run server-side (article page +
+ *  build) over agent-controlled content, so an unbounded quantifier is a
+ *  quadratic-ReDoS DoS. The load-bearing fix is the two `\s*` straddling the
+ *  empty-able optional (`\s*(?:<a…>)?\s*`): a long whitespace run could partition
+ *  between them O(n) ways → O(n²) (a `<p>`+300k-spaces body hung the render for
+ *  minutes). Bounding the `\s` (and the rest) removes the ambiguity; the limits
+ *  stay generous for real share URLs. */
 export function processEmbeds(html: string): string {
   html = html.replace(
-    /<p>\s*(?:<a[^>]{0,200}>)?\s*(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})[^\s<]{0,256}\s*(?:<\/a>)?\s*<\/p>/gi,
+    /<p>\s{0,8}(?:<a[^>]{0,200}>)?\s{0,8}(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})[^\s<]{0,256}\s{0,8}(?:<\/a>)?\s{0,8}<\/p>/gi,
     '<div class="lb-embed"><div class="lb-yt-embed"><iframe src="https://www.youtube-nocookie.com/embed/$1" allowfullscreen loading="lazy" title="YouTube video"></iframe></div></div>',
   );
   html = html.replace(
-    /<p>\s*(?:<a[^>]{0,200}>)?\s*https?:\/\/(?:twitter\.com|x\.com)\/(\w{1,40})\/status\/(\d{1,25})[^\s<]{0,256}\s*(?:<\/a>)?\s*<\/p>/gi,
+    /<p>\s{0,8}(?:<a[^>]{0,200}>)?\s{0,8}https?:\/\/(?:twitter\.com|x\.com)\/(\w{1,40})\/status\/(\d{1,25})[^\s<]{0,256}\s{0,8}(?:<\/a>)?\s{0,8}<\/p>/gi,
     '<div class="lb-tweet-embed"><blockquote class="twitter-tweet" data-dnt="true"><a href="https://twitter.com/$1/status/$2"></a></blockquote></div>',
   );
   html = html.replace(
-    /<p>\s*(?:<a[^>]{0,200}>)?\s*https?:\/\/codepen\.io\/([\w-]{1,80})\/pen\/([\w-]{1,80})[^\s<]{0,256}\s*(?:<\/a>)?\s*<\/p>/gi,
+    /<p>\s{0,8}(?:<a[^>]{0,200}>)?\s{0,8}https?:\/\/codepen\.io\/([\w-]{1,80})\/pen\/([\w-]{1,80})[^\s<]{0,256}\s{0,8}(?:<\/a>)?\s{0,8}<\/p>/gi,
     '<div class="lb-codepen-embed"><iframe src="https://codepen.io/$1/embed/$2?default-tab=result&theme-id=dark" loading="lazy" title="CodePen"></iframe></div>',
   );
   return html;
@@ -57,7 +63,9 @@ export function processEmbeds(html: string): string {
 export function processFootnotes(html: string): string {
   const refs: Record<string, string> = {};
   const refRegex = /\[\^(\w+)\]/g;
-  const defRegex = /<p>\[\^(\w+)\]:\s*([\s\S]*?)<\/p>/g;
+  // Bounded (\s{0,8}, body {0,8000}): the unbounded \s* + lazy body backtracked
+  // quadratically on a `<p>[^x]:` + long-whitespace body with no close (ReDoS).
+  const defRegex = /<p>\[\^(\w+)\]:\s{0,8}([\s\S]{0,8000}?)<\/p>/g;
 
   html = html.replace(defRegex, (_m, id: string, text: string) => {
     refs[id] = text.trim();

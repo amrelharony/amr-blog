@@ -103,3 +103,40 @@ describe("processFootnotes", () => {
   });
 });
 
+describe("ReDoS guards (these regexes run server-side on agent content at render + build)", () => {
+  // Worst-case backtracking inputs. The bounded (linear) code runs in well under a
+  // second; an unbounded-quantifier regression is quadratic and takes tens of seconds
+  // at this size, so the ceiling catches it without flaking on slow CI.
+  const BUDGET_MS = 3000;
+  const N = 200_000;
+  const timed = (fn: () => void) => {
+    const t = performance.now();
+    fn();
+    return performance.now() - t;
+  };
+
+  it("processEmbeds is linear on a <p> + long ASCII whitespace run", () => {
+    expect(timed(() => processEmbeds("<p>" + " ".repeat(N) + "x"))).toBeLessThan(BUDGET_MS);
+  });
+
+  it("processEmbeds is linear on non-ASCII whitespace (NBSP / form-feed, which \\s matches)", () => {
+    expect(timed(() => processEmbeds("<p>" + " \f".repeat(N / 2) + "x"))).toBeLessThan(BUDGET_MS);
+  });
+
+  it("processEmbeds still converts a real YouTube embed", () => {
+    expect(processEmbeds("<p>https://youtu.be/dQw4w9WgXcQ</p>")).toContain(
+      "youtube-nocookie.com/embed/dQw4w9WgXcQ",
+    );
+  });
+
+  it("postProcessHtml (callout) is linear on an unclosed blockquote + whitespace run", () => {
+    expect(timed(() => postProcessHtml("<blockquote>\n<p>[!NOTE]<br>" + " ".repeat(N) + "y"))).toBeLessThan(
+      BUDGET_MS,
+    );
+  });
+
+  it("processFootnotes is linear on a <p>[^x]: + whitespace run", () => {
+    expect(timed(() => processFootnotes("<p>[^x]:" + " ".repeat(N) + "y"))).toBeLessThan(BUDGET_MS);
+  });
+});
+

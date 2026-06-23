@@ -105,9 +105,12 @@ export function stripMarkdown(md: string): string {
   return md
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/\[!(?:NOTE|TIP|WARNING|DANGER|IMPORTANT|CAUTION|QUOTE)\]/gi, " ")
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/<[^>]+>/g, " ")
+    // Bounded inner classes ({0,512}/{0,2048}/{1,2048}): an unbounded [^\]]*/[^>]+ over
+    // a long run of '[' or '<' backtracks quadratically, and this runs on the FULL body
+    // for every /api/search hit. buildSnippet also pre-truncates as the primary bound.
+    .replace(/!\[([^\]]{0,512})\]\([^)]{0,2048}\)/g, "$1")
+    .replace(/\[([^\]]{0,512})\]\([^)]{0,2048}\)/g, "$1")
+    .replace(/<[^>]{1,2048}>/g, " ")
     .replace(/^#{1,6}\s+/gm, "")
     .replace(/^>\s?/gm, "")
     .replace(/[*_~`|]+/g, "")
@@ -120,7 +123,10 @@ export function stripMarkdown(md: string): string {
  * Falls back to the document head when no term matches the stripped text.
  */
 export function buildSnippet(content: string, q: string, len = 160): string {
-  const text = stripMarkdown(content || "");
+  // Truncate before stripping: a snippet needs only a small window, and stripMarkdown
+  // runs several regexes over the whole body — capping the input bounds /api/search
+  // CPU so a pathological body can't burn seconds per (cache-bypassing) query.
+  const text = stripMarkdown((content || "").slice(0, 20000));
   if (!text) return "";
   const lower = text.toLowerCase();
   let hit = -1;
