@@ -32,18 +32,22 @@ export function postProcessHtml(html: string): string {
   );
 }
 
-/** Turn bare YouTube / X(Twitter) / CodePen links into embeds. */
+/** Turn bare YouTube / X(Twitter) / CodePen links into embeds.
+ *  Quantifiers are BOUNDED ({0,N}) on purpose: the unbounded `[^\s<]*` trailing a
+ *  greedy id capture (e.g. `([\w-]+)…[^\s<]*`) caused quadratic ReDoS on a crafted
+ *  body (e.g. `<p>https://codepen.io/u/pen/aaaa…` with no close), which renders
+ *  server-side and at build. Bounds are generous for real share URLs. */
 export function processEmbeds(html: string): string {
   html = html.replace(
-    /<p>\s*(?:<a[^>]*>)?\s*(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})[^\s<]*\s*(?:<\/a>)?\s*<\/p>/gi,
+    /<p>\s*(?:<a[^>]{0,200}>)?\s*(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})[^\s<]{0,256}\s*(?:<\/a>)?\s*<\/p>/gi,
     '<div class="lb-embed"><div class="lb-yt-embed"><iframe src="https://www.youtube-nocookie.com/embed/$1" allowfullscreen loading="lazy" title="YouTube video"></iframe></div></div>',
   );
   html = html.replace(
-    /<p>\s*(?:<a[^>]*>)?\s*https?:\/\/(?:twitter\.com|x\.com)\/(\w+)\/status\/(\d+)[^\s<]*\s*(?:<\/a>)?\s*<\/p>/gi,
+    /<p>\s*(?:<a[^>]{0,200}>)?\s*https?:\/\/(?:twitter\.com|x\.com)\/(\w{1,40})\/status\/(\d{1,25})[^\s<]{0,256}\s*(?:<\/a>)?\s*<\/p>/gi,
     '<div class="lb-tweet-embed"><blockquote class="twitter-tweet" data-dnt="true"><a href="https://twitter.com/$1/status/$2"></a></blockquote></div>',
   );
   html = html.replace(
-    /<p>\s*(?:<a[^>]*>)?\s*https?:\/\/codepen\.io\/([\w-]+)\/pen\/([\w-]+)[^\s<]*\s*(?:<\/a>)?\s*<\/p>/gi,
+    /<p>\s*(?:<a[^>]{0,200}>)?\s*https?:\/\/codepen\.io\/([\w-]{1,80})\/pen\/([\w-]{1,80})[^\s<]{0,256}\s*(?:<\/a>)?\s*<\/p>/gi,
     '<div class="lb-codepen-embed"><iframe src="https://codepen.io/$1/embed/$2?default-tab=result&theme-id=dark" loading="lazy" title="CodePen"></iframe></div>',
   );
   return html;
