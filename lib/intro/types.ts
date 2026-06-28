@@ -30,7 +30,7 @@ export interface IntroVariation {
   run: (ctx: IntroCtx) => IntroRun;
 }
 
-export const WORDMARK = "THE BILINGUAL EXECUTIVE BLOG";
+export const WORDMARK = "FINTECH BILINGUALS";
 
 // "#rrggbb" → [r,g,b] in 0..1 (for WebGL uniforms). Falls back to cyan.
 export function hexToRgb01(hex: string): [number, number, number] {

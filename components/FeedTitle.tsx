@@ -7,9 +7,9 @@ export default function FeedTitle() {
   const router = useRouter();
   return (
     <h1 className="lb-feed-title" onDoubleClick={() => router.push("/admin")}>
-      THE BILINGUAL
+      FINTECH
       <br />
-      EXECUTIVE BLOG
+      BILINGUALS
     </h1>
   );
 }

@@ -21,10 +21,11 @@ const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('theme');var li
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Amr Elharony — Writing",
-    template: "%s · Amr Elharony",
+    default: "Fintech Bilinguals — Amr Elharony",
+    template: "%s · Fintech Bilinguals",
   },
-  description: "Articles and thoughts by Amr Elharony.",
+  description:
+    "Speaking both business and tech: deep dives on fintech, agile, and digital transformation by Amr Elharony.",
   alternates: { canonical: "/", types: { "application/rss+xml": "/feed.xml" } },
 };
 
