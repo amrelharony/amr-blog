@@ -33,7 +33,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     },
     openGraph: {
       type: "website",
-      title: `${cat.label} — Amr Elharony`,
+      title: `${cat.label} — Fintech Bilinguals`,
       description: cat.blurb,
       url: `/category/${cat.slug}`,
     },
@@ -58,7 +58,7 @@ export default async function CategoryPage({ params }: Params) {
     name: `${cat.label} Articles`,
     description: cat.blurb,
     url: `${siteUrl}/category/${cat.slug}`,
-    isPartOf: { "@type": "WebSite", name: "Amr Elharony Blog", url: siteUrl },
+    isPartOf: { "@type": "WebSite", name: "Fintech Bilinguals", url: siteUrl },
     mainEntity: {
       "@type": "ItemList",
       numberOfItems: total,

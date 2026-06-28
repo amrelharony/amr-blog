@@ -44,9 +44,9 @@ export async function GET() {
   const rss = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
 <channel>
-  <title>The Bilingual Executive Blog — Amr Elharony</title>
+  <title>Fintech Bilinguals — Amr Elharony</title>
   <link>${SITE}/</link>
-  <description>Deep dives on Agile, FinTech, and Digital Transformation</description>
+  <description>Speaking both business and tech in fintech.</description>
   <language>en-us</language>
   <atom:link href="${SITE}/feed.xml" rel="self" type="application/rss+xml"/>
 ${items}

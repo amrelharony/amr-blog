@@ -57,7 +57,7 @@ export default async function FeedPage() {
 
       <header className="lb-feed-header lb-reveal">
         <FeedTitle />
-        <p className="lb-feed-sub">DEEP DIVES ON AGILE, FINTECH, AND DIGITAL TRANSFORMATION</p>
+        <p className="lb-feed-sub">SPEAKING BOTH BUSINESS AND TECH IN FINTECH</p>
         <div className="lb-feed-line" aria-hidden="true" />
       </header>
 

@@ -58,7 +58,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
           <div style={{ display: "flex", fontSize: 26, fontWeight: 700, letterSpacing: 4, color: ACCENT }}>
             AMR ELHARONY
           </div>
-          <div style={{ display: "flex", fontSize: 22, letterSpacing: 2, color: SUB }}>BLOG</div>
+          <div style={{ display: "flex", fontSize: 22, letterSpacing: 2, color: SUB }}>FINTECH BILINGUALS</div>
         </div>
 
         {/* Title */}

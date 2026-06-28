@@ -36,7 +36,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!a) return { title: "Not found", robots: { index: false } };
   const description = a.excerpt || a.title;
   return {
-    // `absolute` drops the layout's "· Amr Elharony" suffix so the keyword-rich
+    // `absolute` drops the layout's "· Fintech Bilinguals" suffix so the keyword-rich
     // article title isn't pushed past the ~60-char SERP width.
     title: { absolute: a.title },
     description,
@@ -104,7 +104,7 @@ export default async function ArticlePage({ params }: Params) {
     },
     publisher: {
       "@type": "Organization",
-      name: "Amr Elharony",
+      name: "Fintech Bilinguals",
       logo: { "@type": "ImageObject", url: `${siteUrl}/icon.png` },
     },
     mainEntityOfPage: url,
