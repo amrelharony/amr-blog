@@ -10,5 +10,13 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["lib/**/*.test.ts"],
+    coverage: {
+      provider: "v8",
+      // Vitest 4 removed coverage.all — an explicit include is what makes
+      // UNtested lib files show up in the report at 0%.
+      include: ["lib/**/*.ts"],
+      exclude: ["lib/**/*.test.ts"],
+      reporter: ["text", "lcov"],
+    },
   },
 });

@@ -4,8 +4,36 @@
 // (/api/admin/newsletter, session-authed) reuses the exact same path.
 import { NextRequest, NextResponse } from "next/server";
 import { runBulletinSend } from "@/lib/newsletter/send";
+import { logEvent } from "@/lib/log";
 
 export const maxDuration = 60;
+
+/** Run the send with start/end/error log lines so cron runs are visible. */
+async function loggedSend(trigger: "cron" | "manual"): Promise<NextResponse> {
+  const started = Date.now();
+  logEvent("cron.bulletin.start", { trigger });
+  try {
+    const { status, result } = await runBulletinSend();
+    logEvent("cron.bulletin.end", {
+      trigger,
+      ok: result.ok ?? false,
+      skipped: result.skipped ?? false,
+      reason: result.reason,
+      articles: result.articles,
+      sent: result.sent,
+      remaining: result.remaining,
+      durationMs: Date.now() - started,
+    });
+    return NextResponse.json(result, { status });
+  } catch (e) {
+    logEvent("cron.bulletin.error", {
+      trigger,
+      message: (e as Error).message,
+      durationMs: Date.now() - started,
+    });
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+  }
+}
 
 export async function GET(req: NextRequest) {
   // Vercel auto-attaches `Authorization: Bearer $CRON_SECRET` to cron invocations when
@@ -15,22 +43,12 @@ export async function GET(req: NextRequest) {
   const auth = req.headers.get("authorization") || "";
   if (!cronSecret || auth !== `Bearer ${cronSecret}`)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  try {
-    const { status, result } = await runBulletinSend();
-    return NextResponse.json(result, { status });
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
-  }
+  return loggedSend("cron");
 }
 
 export async function POST(req: NextRequest) {
   const secret = process.env.NEWSLETTER_ADMIN_SECRET;
   if (!secret || req.headers.get("x-admin-secret") !== secret)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  try {
-    const { status, result } = await runBulletinSend();
-    return NextResponse.json(result, { status });
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
-  }
+  return loggedSend("manual");
 }

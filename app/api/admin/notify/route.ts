@@ -23,6 +23,14 @@ export async function POST(req: NextRequest) {
   }
   if (!id) return Response.json({ error: "id required" }, { status: 400 });
 
-  after(() => runArticleNotify(id));
+  // runArticleNotify is fail-open; the catch is a backstop so a regression to
+  // throwing can never surface as an unhandled rejection in the after() task.
+  after(async () => {
+    try {
+      await runArticleNotify(id);
+    } catch (e) {
+      console.error("[after:admin/notify]", id, e);
+    }
+  });
   return Response.json({ ok: true }, { status: 202 });
 }

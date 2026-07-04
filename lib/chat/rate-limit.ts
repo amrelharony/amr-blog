@@ -24,11 +24,18 @@ export const DEFAULT_MAX = { daily: 25, weekly: 100, monthly: 300 } as const;
 // p_user_id arg the DB function doesn't accept, so every call errored and — under the old
 // fail-closed default — returned 429 on every message.
 export function resolveLimits(rl: unknown): RateLimits {
-  const row = Array.isArray(rl) ? rl[0] : rl;
-  if (row && typeof row === "object" && typeof (row as RateLimits).allowed === "boolean") {
-    return row as RateLimits;
+  if (isDecision(rl)) {
+    return (Array.isArray(rl) ? rl[0] : rl) as RateLimits;
   }
   return { allowed: true, daily_used: 0, weekly_used: 0, monthly_used: 0 };
+}
+
+/** True iff the RPC result carries a definitive decision (a row with a boolean
+ *  `allowed`). Lets the route tell "explicitly allowed" apart from the silent
+ *  fail-open fallback above, so the fallback can be logged when it happens. */
+export function isDecision(rl: unknown): boolean {
+  const row = Array.isArray(rl) ? rl[0] : rl;
+  return !!row && typeof row === "object" && typeof (row as RateLimits).allowed === "boolean";
 }
 
 export function rateLimitHeaders(l: RateLimits): Record<string, string> {

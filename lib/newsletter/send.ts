@@ -36,11 +36,17 @@ function esc(s: string) {
   return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+// A hung Supabase/Resend connection would otherwise wedge the whole cron run
+// (maxDuration = 60 on the bulletin route) — bound every fetch.
+const RPC_TIMEOUT_MS = 10_000;
+const RESEND_TIMEOUT_MS = 15_000;
+
 async function rpc<T>(fn: string, params?: unknown): Promise<T> {
   const res = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
     method: "POST",
     headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(params || {}),
+    signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`RPC ${fn} failed: ${res.status} ${await res.text()}`);
   return res.json() as Promise<T>;
@@ -65,6 +71,7 @@ async function rpcAll<T>(fn: string, params?: unknown): Promise<T[]> {
         Range: `${from}-${from + PAGE - 1}`,
       },
       body: JSON.stringify(params || {}),
+      signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`RPC ${fn} failed: ${res.status} ${await res.text()}`);
     const rows = (await res.json()) as T[];
@@ -131,17 +138,24 @@ export async function runBulletinSend(): Promise<{ status: number; result: Bulle
   let sent = 0;
   for (const sub of batch) {
     const unsubUrl = `${SITE}/api/newsletter/unsubscribe?token=${encodeURIComponent(sub.unsubscribe_token)}`;
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: "Amr Elharony <noreply@updates.amrelharony.com>",
-        to: [sub.email],
-        subject: `${articles.length} New Article${articles.length !== 1 ? "s" : ""} — Biweekly Digest`,
-        html: bulletinHTML(articles, unsubUrl),
-      }),
-    });
-    if (res.ok) sent++;
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: "Amr Elharony <noreply@updates.amrelharony.com>",
+          to: [sub.email],
+          subject: `${articles.length} New Article${articles.length !== 1 ? "s" : ""} — Biweekly Digest`,
+          html: bulletinHTML(articles, unsubUrl),
+        }),
+        // One hung Resend call must not eat the route's whole 60s budget mid-batch;
+        // a timeout counts as unsent and the resume logic picks the batch back up.
+        signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),
+      });
+      if (res.ok) sent++;
+    } catch {
+      /* timeout/network error -> counted as unsent */
+    }
   }
 
   await rpc("update_bulletin_log", { p_id: logId, p_batch_remaining: Math.max(0, remaining), p_status: remaining > 0 ? "pending" : "sent" });

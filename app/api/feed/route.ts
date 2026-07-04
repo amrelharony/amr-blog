@@ -6,6 +6,8 @@ import { NextRequest } from "next/server";
 import { getFeedArticles, getArticlesByCategory, getArticlesByTag } from "@/lib/queries/articles";
 import { FEED_PAGE_SIZE } from "@/lib/constants";
 import { CATEGORY_LABELS } from "@/lib/categories";
+import { createIpWindow, clientIpFrom } from "@/lib/rate-limit/ip-window";
+import { logEvent } from "@/lib/log";
 
 export const runtime = "nodejs";
 
@@ -13,7 +15,25 @@ export const runtime = "nodejs";
 const MAX_OFFSET = 6000;
 const CACHE = "public, s-maxage=300, stale-while-revalidate=600";
 
+// Per-IP backstop against cache-busting floods (unique offset/tag combos bypass
+// the CDN). In-memory/per-instance by design — see lib/rate-limit/ip-window.ts.
+const limiter = createIpWindow({ limit: 30, windowMs: 60_000 });
+
 export async function GET(request: NextRequest) {
+  const ip = clientIpFrom(request.headers);
+  const gate = limiter.check(ip);
+  if (!gate.allowed) {
+    logEvent("feed.rate_limited", { ip });
+    return Response.json(
+      { error: "rate_limited" },
+      {
+        status: 429,
+        // no-store is critical: a cached 429 would poison the shared CDN entry.
+        headers: { "Retry-After": String(gate.retryAfterSec), "Cache-Control": "no-store" },
+      },
+    );
+  }
+
   const raw = Number(request.nextUrl.searchParams.get("offset"));
   const offset = Number.isInteger(raw) && raw >= 0 && raw <= MAX_OFFSET ? raw : 0;
   // Optional category filter (validated against the known labels).
