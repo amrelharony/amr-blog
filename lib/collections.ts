@@ -58,6 +58,26 @@ function cloud(fn: (sb: ReturnType<typeof getBrowserClient>) => Promise<unknown>
   })();
 }
 
+// Offline copies of saved articles (Cache API, consumed by public/sw.js as its
+// navigation fallback). Best-effort like cloud(): failures never surface.
+const SAVED_CACHE = "lb-saved";
+function cacheSavedArticle(slug: string) {
+  try {
+    if (!("caches" in window) || !slug) return;
+    caches.open(SAVED_CACHE).then((c) => c.add(`/p/${slug}`)).catch(() => {});
+  } catch {
+    /* best-effort */
+  }
+}
+function uncacheSavedArticle(slug: string) {
+  try {
+    if (!("caches" in window) || !slug) return;
+    caches.open(SAVED_CACHE).then((c) => c.delete(`/p/${slug}`)).catch(() => {});
+  } catch {
+    /* best-effort */
+  }
+}
+
 export function createList(name: string, emoji: string): ReadingList {
   const lists = getLists();
   const list: ReadingList = { id: genId(), cloudId: null, name, emoji, items: [] };
@@ -102,13 +122,19 @@ export function addToList(listId: string, item: ListItem) {
   if (!l || l.items.some((it) => it.articleId === item.articleId)) return;
   l.items.push(item);
   setLists(lists);
+  cacheSavedArticle(item.slug);
   if (l.cloudId) cloud((sb) => sb.rpc("add_to_reading_list", { p_list_id: l.cloudId, p_article_id: item.articleId }));
 }
 export function removeFromList(listId: string, articleId: string) {
   const lists = getLists();
   const l = lists.find((x) => x.id === listId);
   if (!l) return;
+  const removed = l.items.find((it) => it.articleId === articleId);
   l.items = l.items.filter((it) => it.articleId !== articleId);
   setLists(lists);
+  // Drop the offline copy only when no other list still holds this article.
+  if (removed?.slug && !lists.some((x) => x.items.some((it) => it.articleId === articleId))) {
+    uncacheSavedArticle(removed.slug);
+  }
   if (l.cloudId) cloud((sb) => sb.rpc("remove_from_reading_list", { p_list_id: l.cloudId, p_article_id: articleId }));
 }

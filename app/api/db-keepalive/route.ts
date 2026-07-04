@@ -26,6 +26,45 @@ export async function GET(req: NextRequest) {
     // 3. Refresh ISR so newly-published scheduled posts appear
     revalidatePath("/");
     revalidatePath("/thoughts");
+    // 4. Prune the trending view-rollup past its 60-day window (service role —
+    //    the table is RLS-locked with no policies; skip silently if unconfigured).
+    const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (svcKey) {
+      const cutoff = new Date(Date.now() - 60 * 86400_000).toISOString().slice(0, 10);
+      await fetch(`${SB_URL}/rest/v1/article_view_daily?day=lt.${cutoff}`, {
+        method: "DELETE",
+        headers: { apikey: svcKey, Authorization: `Bearer ${svcKey}` },
+      }).catch(() => {});
+    }
+
+    // 5. Instant-notification sweep: cover scheduled publishes (which have no
+    //    request-time trigger) and resume any half-sent runs. Fail-open — a
+    //    missing migration/table just skips. Invoked hourly by the LinkedIn
+    //    GitHub Action in addition to the every-3-days Vercel cron.
+    try {
+      const { createServiceClient } = await import("@/lib/supabase/service");
+      const { runArticleNotify } = await import("@/lib/newsletter/notify");
+      const svc = createServiceClient();
+      const since = new Date(Date.now() - 7 * 86400_000).toISOString();
+      const { data: due } = await svc
+        .from("longform_articles")
+        .select("id,article_notification_log(id)")
+        .eq("published", true)
+        .gte("scheduled_at", since)
+        .limit(20);
+      for (const row of due ?? []) {
+        const logs = (row as { article_notification_log?: { id: string }[] }).article_notification_log;
+        if (!logs || logs.length === 0) await runArticleNotify((row as { id: string }).id);
+      }
+      const { data: pend } = await svc
+        .from("article_notification_log")
+        .select("article_id")
+        .eq("status", "pending")
+        .limit(10);
+      for (const p of pend ?? []) await runArticleNotify((p as { article_id: string }).article_id);
+    } catch {
+      /* notifications are best-effort */
+    }
     return NextResponse.json({ ok: ping.ok, status: ping.status, ts });
   } catch (err) {
     return NextResponse.json({ ok: false, error: (err as Error).message, ts }, { status: 500 });

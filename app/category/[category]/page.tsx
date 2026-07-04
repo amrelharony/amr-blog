@@ -7,6 +7,8 @@ import { CATEGORY_PAGE_SIZE } from "@/lib/constants";
 import ArticleCardV2 from "@/components/ArticleCardV2";
 import FeedAnimations from "@/components/FeedAnimations";
 import FeedLoadMore from "@/components/FeedLoadMore";
+import Breadcrumbs from "@/components/Breadcrumbs";
+import { categoryCrumbs, breadcrumbJsonLd } from "@/lib/breadcrumbs";
 
 export const revalidate = 300;
 
@@ -70,14 +72,9 @@ export default async function CategoryPage({ params }: Params) {
       })),
     },
   };
-  const breadcrumbLd = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Home", item: siteUrl },
-      { "@type": "ListItem", position: 2, name: cat.label, item: `${siteUrl}/category/${cat.slug}` },
-    ],
-  };
+  // Shared builder feeds both the JSON-LD and the visible nav (lib/breadcrumbs.ts).
+  const crumbs = categoryCrumbs(cat, siteUrl);
+  const breadcrumbLd = breadcrumbJsonLd(crumbs);
 
   return (
     <div className="lb-wrap" style={{ maxWidth: 900 }}>
@@ -100,6 +97,10 @@ export default async function CategoryPage({ params }: Params) {
           </a>
         </div>
       </nav>
+
+      <Breadcrumbs crumbs={crumbs} siteUrl={siteUrl} />
+      {/* Skip-link landing point (app/layout.tsx renders the link itself). */}
+      <div id="main-content" tabIndex={-1} className="lb-skip-target" />
 
       <header className="lb-feed-header lb-reveal">
         <h1 className="lb-feed-title" style={{ fontSize: "clamp(28px, 5vw, 48px)" }}>

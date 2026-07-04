@@ -30,6 +30,9 @@ export function sanitizeHtml(html: string): string {
       a: ["href", "class", "id", "data-fn", "data-fn-text"],
       div: ["class", "id"],
       span: ["class"],
+      // data-lang drives the code-block language badge (pre[data-lang]::before);
+      // values come only from lib/markdown/highlight.ts normalizeLang.
+      pre: ["class", "data-lang"],
       blockquote: ["class", "data-dnt"],
       th: ["align"],
       td: ["align"],

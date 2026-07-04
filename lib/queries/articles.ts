@@ -20,17 +20,24 @@ export async function getFeedArticles(limit = 50, offset = 0): Promise<ArticleCa
   return (data ?? []) as ArticleCard[];
 }
 
+// Explicit column list (not "*") so heavyweight non-render columns — notably
+// the 384-float `embedding` vector — never ride along on every article render.
+const ARTICLE_COLUMNS =
+  "id,created_at,updated_at,title,slug,excerpt,content,cover_image,tags,category," +
+  "source_url,published,views,reactions,scheduled_at,linkedin_posted,series_name," +
+  "series_order,tldr,pdf_url,pdf_name";
+
 /** One published article by slug, or null. */
 export async function getArticleBySlug(slug: string): Promise<Article | null> {
   const sb = createPublicClient();
   const { data, error } = await sb
     .from("longform_articles")
-    .select("*")
+    .select(ARTICLE_COLUMNS)
     .eq("slug", slug)
     .eq("published", true)
     .maybeSingle();
   if (error) throw error;
-  return (data as Article) ?? null;
+  return (data as unknown as Article) ?? null;
 }
 
 // PostgREST caps a single response at ~1000 rows, so anything that must cover the
@@ -78,15 +85,97 @@ export async function getAllPublishedForSitemap(): Promise<
   return out;
 }
 
-/**
- * Related articles — mirrors renderRelated() in Js/blog-article.js: pull the 20
- * most recent published (excluding current), rank by tag-overlap then views, top 4.
- */
-export async function getRelatedArticles(article: {
-  id: string;
-  tags: string[];
-}): Promise<ArticleCard[]> {
+/** Every published article's archive fields (slug/title/date), paged past the cap. */
+export async function getAllPublishedForArchive(): Promise<
+  Pick<ArticleCard, "slug" | "title" | "created_at">[]
+> {
   const sb = createPublicClient();
+  const out: Pick<ArticleCard, "slug" | "title" | "created_at">[] = [];
+  for (let from = 0; from < 200000; from += PG_PAGE) {
+    const { data, error } = await sb
+      .from("longform_articles")
+      .select("slug,title,created_at")
+      .eq("published", true)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + PG_PAGE - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as Pick<ArticleCard, "slug" | "title" | "created_at">[];
+    out.push(...rows);
+    if (rows.length < PG_PAGE) break;
+  }
+  return out;
+}
+
+/** Every published article's tags array (for the /tags index), paged past the cap. */
+export async function getAllPublishedTagRows(): Promise<{ tags: string[] | null }[]> {
+  const sb = createPublicClient();
+  const out: { tags: string[] | null }[] = [];
+  for (let from = 0; from < 200000; from += PG_PAGE) {
+    const { data, error } = await sb
+      .from("longform_articles")
+      .select("tags")
+      .eq("published", true)
+      .order("id", { ascending: true })
+      .range(from, from + PG_PAGE - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as { tags: string[] | null }[];
+    out.push(...rows);
+    if (rows.length < PG_PAGE) break;
+  }
+  return out;
+}
+
+/** series_name/date pairs of all published series parts (for the /series index), paged. */
+export async function getAllSeriesRows(): Promise<
+  { series_name: string | null; created_at: string }[]
+> {
+  const sb = createPublicClient();
+  const out: { series_name: string | null; created_at: string }[] = [];
+  for (let from = 0; from < 200000; from += PG_PAGE) {
+    const { data, error } = await sb
+      .from("longform_articles")
+      .select("series_name,created_at")
+      .eq("published", true)
+      .not("series_name", "is", null)
+      .order("id", { ascending: true })
+      .range(from, from + PG_PAGE - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as { series_name: string | null; created_at: string }[];
+    out.push(...rows);
+    if (rows.length < PG_PAGE) break;
+  }
+  return out;
+}
+
+/**
+ * Related articles — semantic (pgvector cosine, via the match_related_articles
+ * RPC from db/migrations/0011) when the article is embedded; otherwise the
+ * original tag-overlap ranking over the 20 most recent. The fallback also
+ * covers projects where the migration hasn't been applied yet: the RPC call
+ * errors, we log once and rank by tags — nothing breaks.
+ */
+export async function getRelatedArticles(
+  article: {
+    id: string;
+    tags: string[];
+  },
+  n = 4,
+): Promise<ArticleCard[]> {
+  const sb = createPublicClient();
+
+  try {
+    const { data, error } = await sb.rpc("match_related_articles", {
+      p_article_id: article.id,
+      p_count: n,
+    });
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return data as ArticleCard[];
+    }
+  } catch {
+    /* fall through to tag ranking */
+  }
+
   const { data, error } = await sb
     .from("longform_articles")
     .select(CARD_COLUMNS)
@@ -95,7 +184,21 @@ export async function getRelatedArticles(article: {
     .order("created_at", { ascending: false })
     .limit(20);
   if (error) throw error;
-  return rankRelated((data ?? []) as ArticleCard[], article.tags || []);
+  return rankRelated((data ?? []) as ArticleCard[], article.tags || [], n);
+}
+
+/**
+ * "Read next" pick + related grid from ONE ranked pool: the top pick becomes
+ * the prominent Read-next card, the rest feed the related grid. Kept as a
+ * single seam so semantic (vector) ranking can replace the pool without
+ * touching the article page.
+ */
+export async function getReadNextAndRelated(article: {
+  id: string;
+  tags: string[];
+}): Promise<{ readNext: ArticleCard | null; related: ArticleCard[] }> {
+  const ranked = await getRelatedArticles(article, 5);
+  return { readNext: ranked[0] ?? null, related: ranked.slice(1) };
 }
 
 /** ArticleCard plus the markdown body — used server-side to build search snippets. */
@@ -108,18 +211,42 @@ export type SearchableArticle = ArticleCard & { content: string };
  * Sanitizes its own input — commas/parens/quotes would corrupt the .or()
  * filter string, so this guard must live next to the interpolation.
  */
-export async function searchArticles(q: string, limit = 12): Promise<SearchableArticle[]> {
+export async function searchArticles(
+  q: string,
+  limit = 12,
+  category?: string | null,
+): Promise<SearchableArticle[]> {
   q = sanitizeSearchQuery(q);
   if (!q) return [];
   const sb = createPublicClient();
-  const { data, error } = await sb
+  let query = sb
     .from("longform_articles")
     .select(`${CARD_COLUMNS},content`)
     .eq("published", true)
-    .or(`title.wfts.${q},excerpt.wfts.${q},content.wfts.${q}`)
-    .limit(limit);
+    .or(`title.wfts.${q},excerpt.wfts.${q},content.wfts.${q}`);
+  if (category) query = query.eq("category", category);
+  const { data, error } = await query.limit(limit);
   if (error) throw error;
   return (data ?? []) as SearchableArticle[];
+}
+
+/**
+ * Vector-similarity hits for the hybrid search arm (match_articles RPC from
+ * db/migrations/0011). Rows carry no content (snippets fall back to excerpts).
+ */
+export async function matchArticlesByVector(
+  vector: number[],
+  limit = 12,
+): Promise<SearchableArticle[]> {
+  const sb = createPublicClient();
+  const { data, error } = await sb.rpc("match_articles", {
+    p_embedding: JSON.stringify(vector),
+    p_count: limit,
+  });
+  if (error) throw error;
+  return ((data ?? []) as ArticleCard[]).map(
+    (a) => ({ ...a, content: "" }) as SearchableArticle,
+  );
 }
 
 /** Published articles in a category, newest first — range-paged for archives. */

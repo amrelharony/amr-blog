@@ -6,6 +6,7 @@ import {
   stripMarkdown,
   buildSnippet,
   matchedTags,
+  fuseResults,
 } from "@/lib/search";
 
 describe("sanitizeSearchQuery", () => {
@@ -161,5 +162,35 @@ describe("ReDoS guards (buildSnippet/stripMarkdown run on the full body for ever
 
   it("stripMarkdown still strips a normal link to its text", () => {
     expect(stripMarkdown("see [the docs](https://example.com/x) now")).toBe("see the docs now");
+  });
+});
+
+describe("fuseResults (hybrid search reciprocal-rank fusion)", () => {
+  const item = (slug: string) => ({ slug });
+  const key = (x: { slug: string }) => x.slug;
+
+  it("items present in both lists outrank single-list items", () => {
+    const fts = [item("both"), item("fts-only")];
+    const vec = [item("vec-only"), item("both")];
+    const out = fuseResults(fts, vec, key, 12);
+    expect(out[0].slug).toBe("both");
+    expect(out.map((x) => x.slug)).toHaveLength(3); // deduped
+  });
+
+  it("preserves rank order within a single list and respects limit", () => {
+    const a = [item("a1"), item("a2"), item("a3")];
+    const out = fuseResults(a, [], key, 2);
+    expect(out.map((x) => x.slug)).toEqual(["a1", "a2"]);
+  });
+
+  it("handles both lists empty", () => {
+    expect(fuseResults([], [], key)).toEqual([]);
+  });
+
+  it("keeps the first-seen item object for duplicates (FTS copy wins)", () => {
+    const ftsCopy = { slug: "x", from: "fts" };
+    const vecCopy = { slug: "x", from: "vec" };
+    const out = fuseResults<{ slug: string; from?: string }>([ftsCopy], [vecCopy], (i) => i.slug);
+    expect(out[0].from).toBe("fts");
   });
 });

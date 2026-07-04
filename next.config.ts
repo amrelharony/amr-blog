@@ -19,6 +19,15 @@ const nextConfig: NextConfig = {
     return [
       { source: "/:path*", headers: baseSecurityHeaders },
       { source: "/admin/:path*", headers: [{ key: "X-Frame-Options", value: "DENY" }] },
+      {
+        // Per the Next PWA guide: the SW itself must never be cached, so a new
+        // deploy's worker (with a bumped cache version) takes over immediately.
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+        ],
+      },
     ];
   },
 };

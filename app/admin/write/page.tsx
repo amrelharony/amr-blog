@@ -430,6 +430,23 @@ export default function WritePage() {
       // On a slug rename, also revalidate the OLD path so /p/<oldslug> stops serving
       // stale ISR content (it will re-render and 404 since the row moved).
       if (form.id && origSlugRef.current && origSlugRef.current !== slug) await revalidate(origSlugRef.current);
+      // Fire-and-forget re-embed for semantic related-articles (server is fail-open).
+      if (savedId) {
+        fetch("/api/admin/embed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: savedId }),
+        }).catch(() => {});
+      }
+      // Instant-subscriber notification on publish. Safe to repeat: the server
+      // claims a unique per-article log row, so re-publishes never re-send.
+      if (savedId && mode === "publish") {
+        fetch("/api/admin/notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: savedId }),
+        }).catch(() => {});
+      }
       await logActivity(sb, mode, "article", savedId, form.title.trim());
       clearDraft(); // clears the key for the slot we saved under (form.id here)
       setDirty(false);
@@ -481,6 +498,37 @@ export default function WritePage() {
       setMsg({ t: "TL;DR generated — review and edit before saving.", ok: true });
     } catch (e) {
       setMsg({ t: "TL;DR failed: " + (e as Error).message, ok: false });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Fill the tags field with AI picks from the curated vocabulary — review
+  // before saving; nothing is persisted here (mirrors generateTldr).
+  const suggestTagsClick = async () => {
+    if (!form.title.trim() && form.content.trim().length < 50) {
+      setMsg({ t: "Write a title or some content first.", ok: false });
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await fetch("/api/admin/suggest-tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: form.title,
+          excerpt: form.excerpt,
+          content: form.content,
+          tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error((data?.error || `HTTP ${r.status}`) + (data?.detail ? ` — ${data.detail}` : ""));
+      set("tags", (data.tags as string[]).join(", "));
+      setMsg({ t: "Tags suggested — review and edit before saving.", ok: true });
+    } catch (e) {
+      setMsg({ t: "Tag suggestion failed: " + (e as Error).message, ok: false });
     } finally {
       setBusy(false);
     }
@@ -849,6 +897,11 @@ export default function WritePage() {
           <div className="adm-field">
             <label className="adm-label">Tags (comma-separated)</label>
             <input className="adm-input" value={form.tags} onChange={(e) => set("tags", e.target.value)} />
+            <div style={{ marginTop: 6 }}>
+              <button className="adm-btn" type="button" disabled={busy} onClick={suggestTagsClick}>
+                🏷️ Suggest tags
+              </button>
+            </div>
           </div>
         </div>
         <div className="adm-row">

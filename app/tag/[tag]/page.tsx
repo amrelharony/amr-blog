@@ -51,6 +51,9 @@ export default async function TagPage({ params }: Params) {
         <div className="lb-feed-line" aria-hidden="true" />
       </header>
 
+      {/* Skip-link landing point (app/layout.tsx renders the link itself). */}
+      <div id="main-content" tabIndex={-1} className="lb-skip-target" />
+
       <main id="lbGrid" role="feed" aria-label="Article list">
         {articles.length === 0 ? (
           <div className="lb-empty" role="status">

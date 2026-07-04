@@ -70,4 +70,27 @@ describe("rankRelated", () => {
     rankRelated(pool, []);
     expect(pool.map((a) => a.id)).toEqual(["a", "b"]);
   });
+
+  // The "Read next" card takes the top-1 pick (getReadNextAndRelated slices
+  // rankRelated's output), so the head of the ranking must be well-defined.
+  it("puts the strongest pick first when the article has no tags (views order)", () => {
+    const pool = [
+      card({ id: "quiet", views: 1 }),
+      card({ id: "popular", views: 100 }),
+    ];
+    expect(rankRelated(pool, [], 5)[0].id).toBe("popular");
+  });
+
+  it("keeps pool order for full ties (stable sort)", () => {
+    const pool = [
+      card({ id: "first", tags: ["agile"], views: 10 }),
+      card({ id: "second", tags: ["agile"], views: 10 }),
+    ];
+    expect(rankRelated(pool, ["agile"], 5).map((a) => a.id)).toEqual(["first", "second"]);
+  });
+
+  it("returns fewer than n when the pool is small, empty pool → empty", () => {
+    expect(rankRelated([card({ id: "only" })], ["x"], 5)).toHaveLength(1);
+    expect(rankRelated([], ["x"], 5)).toEqual([]);
+  });
 });
