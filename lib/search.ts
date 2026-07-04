@@ -142,6 +142,37 @@ export function buildSnippet(content: string, q: string, len = 160): string {
   return out;
 }
 
+/**
+ * Reciprocal-rank fusion of two ranked lists (full-text + vector arms of
+ * hybrid search). Standard RRF: score(item) = Σ 1/(k + rank); items present
+ * in both lists rise. Stable for k=60 (the conventional constant).
+ */
+export function fuseResults<T>(
+  a: T[],
+  b: T[],
+  key: (x: T) => string,
+  limit = 12,
+  k = 60,
+): T[] {
+  const scores = new Map<string, { item: T; score: number }>();
+  for (const [list, weight] of [
+    [a, 1],
+    [b, 1],
+  ] as [T[], number][]) {
+    list.forEach((item, rank) => {
+      const id = key(item);
+      const cur = scores.get(id);
+      const s = weight / (k + rank + 1);
+      if (cur) cur.score += s;
+      else scores.set(id, { item, score: s });
+    });
+  }
+  return [...scores.values()]
+    .sort((x, y) => y.score - x.score)
+    .slice(0, limit)
+    .map((x) => x.item);
+}
+
 /** Tag names from matched articles that themselves match the query, unique, capped. */
 export function matchedTags(rows: { tags: string[] | null }[], q: string, max = 6): string[] {
   const terms = queryTerms(q);

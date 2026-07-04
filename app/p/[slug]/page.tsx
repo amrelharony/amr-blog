@@ -4,11 +4,13 @@ import Link from "next/link";
 import {
   getArticleBySlug,
   getAllPublishedSlugs,
-  getRelatedArticles,
+  getReadNextAndRelated,
   getSeriesSiblings,
 } from "@/lib/queries/articles";
 import { renderArticleHtml } from "@/lib/markdown/parse";
 import { fmtDate, readingTime, isoDate } from "@/lib/format";
+import { shareMessage, shareUrls } from "@/lib/share";
+import { articleCrumbs, breadcrumbJsonLd } from "@/lib/breadcrumbs";
 import ArticleAnimations from "@/components/ArticleAnimations";
 import ArticleReader from "@/components/ArticleReader";
 import ArticleEngagement from "@/components/ArticleEngagement";
@@ -18,6 +20,10 @@ import ReadingTracker from "@/components/ReadingTracker";
 import CollectionsManager from "@/components/CollectionsManager";
 import Annotations from "@/components/Annotations";
 import PdfViewer from "@/components/PdfViewer";
+import Breadcrumbs from "@/components/Breadcrumbs";
+import ReadNext from "@/components/ReadNext";
+import ShareActions from "@/components/ShareActions";
+import TrendingStrip from "@/components/TrendingStrip";
 
 export const revalidate = 300;
 
@@ -69,11 +75,12 @@ export default async function ArticlePage({ params }: Params) {
 
   const html = renderArticleHtml(a.content);
   const url = `${siteUrl}/p/${a.slug}`;
-  const shareText = a.title + (a.excerpt ? `\n\n${a.excerpt}` : "");
+  const shareText = shareMessage(a.title, a.excerpt);
+  const share = shareUrls(a.title, a.excerpt, url);
   const words = (a.content || "").split(/\s+/).filter(Boolean).length;
 
-  const [related, siblings] = await Promise.all([
-    getRelatedArticles({ id: a.id, tags: a.tags || [] }),
+  const [{ readNext, related }, siblings] = await Promise.all([
+    getReadNextAndRelated({ id: a.id, tags: a.tags || [] }),
     a.series_name ? getSeriesSiblings(a.series_name) : Promise.resolve([]),
   ]);
   const seriesIdx = siblings.findIndex((s) => s.id === a.id);
@@ -111,26 +118,10 @@ export default async function ArticlePage({ params }: Params) {
     ...(a.tags?.length ? { keywords: a.tags.join(", ") } : {}),
   };
 
-  // Breadcrumb trail: Home → [first tag] → article. The feed is the home page,
-  // and /tag/[tag] routes exist, so a tag level avoids a duplicate-URL "Home → Home".
-  const firstTag = a.tags?.[0];
-  const crumbs = [
-    { name: "Home", item: siteUrl },
-    ...(firstTag
-      ? [{ name: firstTag, item: `${siteUrl}/tag/${encodeURIComponent(firstTag)}` }]
-      : []),
-    { name: a.title, item: url },
-  ];
-  const breadcrumbLd = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: crumbs.map((c, i) => ({
-      "@type": "ListItem",
-      position: i + 1,
-      name: c.name,
-      item: c.item,
-    })),
-  };
+  // Breadcrumb trail — shared builder feeds both the JSON-LD and the visible
+  // <Breadcrumbs> nav so they can never diverge (lib/breadcrumbs.ts).
+  const crumbs = articleCrumbs(a, siteUrl);
+  const breadcrumbLd = breadcrumbJsonLd(crumbs);
 
   return (
     <div className="lb-wrap">
@@ -154,6 +145,10 @@ export default async function ArticlePage({ params }: Params) {
           </a>
         </div>
       </nav>
+
+      <Breadcrumbs crumbs={crumbs} siteUrl={siteUrl} />
+      {/* Skip-link landing point (app/layout.tsx renders the link itself). */}
+      <div id="main-content" tabIndex={-1} className="lb-skip-target" />
 
       <div id="lbArticle" aria-live="polite">
         <article
@@ -186,9 +181,9 @@ export default async function ArticlePage({ params }: Params) {
           </header>
 
           {a.tldr && (
-            <aside className="lb-tldr lb-reveal" aria-label="TL;DR summary">
+            <aside className="lb-tldr lb-reveal" aria-label="Key takeaways">
               <div className="lb-tldr-label">
-                <i className="fa-solid fa-bolt" aria-hidden="true" /> TL;DR
+                <i className="fa-solid fa-bolt" aria-hidden="true" /> Key takeaways
               </div>
               <p className="lb-tldr-body">{a.tldr}</p>
             </aside>
@@ -248,6 +243,8 @@ export default async function ArticlePage({ params }: Params) {
             </div>
           )}
 
+          {readNext && <ReadNext a={readNext} />}
+
           {showRelated && (
             <div className="lb-related">
               <div className="lb-related-title">RELATED ARTICLES</div>
@@ -265,12 +262,14 @@ export default async function ArticlePage({ params }: Params) {
             </div>
           )}
 
+          <TrendingStrip days={7} count={4} title="POPULAR THIS WEEK" />
+
           {/* Reactions, comments, bookmark, TTS, copy-link — wired in later tasks */}
           <footer className="lb-article-footer lb-reveal">
             <div className="lb-share-panel">
               <a
                 className="lb-share-icon twitter"
-                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(url)}`}
+                href={share.x}
                 target="_blank"
                 rel="noopener"
                 title="Share on X"
@@ -280,7 +279,7 @@ export default async function ArticlePage({ params }: Params) {
               </a>
               <a
                 className="lb-share-icon linkedin"
-                href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`}
+                href={share.linkedin}
                 target="_blank"
                 rel="noopener"
                 title="Share on LinkedIn"
@@ -290,7 +289,7 @@ export default async function ArticlePage({ params }: Params) {
               </a>
               <a
                 className="lb-share-icon whatsapp"
-                href={`https://wa.me/?text=${encodeURIComponent(shareText + "\n\n" + url)}`}
+                href={share.whatsapp}
                 target="_blank"
                 rel="noopener"
                 title="Share on WhatsApp"
@@ -300,7 +299,7 @@ export default async function ArticlePage({ params }: Params) {
               </a>
               <a
                 className="lb-share-icon telegram"
-                href={`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(shareText)}`}
+                href={share.telegram}
                 target="_blank"
                 rel="noopener"
                 title="Share on Telegram"
@@ -310,12 +309,13 @@ export default async function ArticlePage({ params }: Params) {
               </a>
               <a
                 className="lb-share-icon email"
-                href={`mailto:?subject=${encodeURIComponent(a.title)}&body=${encodeURIComponent(shareText + "\n\n" + url)}`}
+                href={share.email}
                 title="Share via Email"
                 aria-label="Share via Email"
               >
                 <i className="fa-solid fa-envelope" aria-hidden="true" />
               </a>
+              <ShareActions url={url} title={a.title} text={shareText} />
               <TtsButton />
               <CollectionsManager articleId={a.id} slug={a.slug} title={a.title} coverImage={a.cover_image || ""} />
             </div>

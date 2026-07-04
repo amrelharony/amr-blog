@@ -86,6 +86,7 @@ export default function ArticleEngagement({
   const [comments, setComments] = useState<Comment[]>([]);
   const [likedIds, setLikedIds] = useState<string[]>([]);
   const [name, setName] = useState("");
+  const [notifyEmail, setNotifyEmail] = useState("");
   const [text, setText] = useState("");
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
@@ -95,6 +96,7 @@ export default function ArticleEngagement({
     setMyRx(lsGet<Record<string, string[]>>("_lb_reactions", {})[articleId] || []);
     setLikedIds(lsGet<string[]>("_lb_comment_likes", []));
     setName(localStorage.getItem("_lb_commenter") || "");
+    setNotifyEmail(localStorage.getItem("_lb_commenter_email") || "");
   }, [articleId, slug]);
 
   // view increment, once per session
@@ -169,14 +171,33 @@ export default function ArticleEngagement({
     if (!content.trim()) return "Comment cannot be empty.";
     await ensureAnonSession();
     localStorage.setItem("_lb_commenter", author);
+    if (notifyEmail.trim()) localStorage.setItem("_lb_commenter_email", notifyEmail.trim());
     setName(author);
-    const { error } = await sb.rpc("post_article_comment", {
+    const base = {
       p_article_id: articleId,
       p_parent_id: parentId,
       p_author: author || "Anonymous",
       p_content: content.trim(),
+    };
+    // The 5-arg RPC stores the reply-alert opt-in (db/migrations/0014); fall
+    // back to the original 4-arg signature until that migration is applied.
+    let { data, error } = await sb.rpc("post_article_comment", {
+      ...base,
+      p_notify_email: notifyEmail.trim() || null,
     });
+    if (error && /post_article_comment/i.test(error.message || "")) {
+      ({ data, error } = await sb.rpc("post_article_comment", base));
+    }
     if (error) return error.message;
+    // A reply may owe the parent commenter an email — the server decides
+    // (subscription check + send-once claim); fire-and-forget.
+    if (parentId && typeof data === "string") {
+      fetch("/api/comments/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comment_id: data }),
+      }).catch(() => {});
+    }
     await loadComments();
     return null;
   };
@@ -264,6 +285,15 @@ export default function ArticleEngagement({
                 onChange={(e) => setText(e.target.value)}
               />
             </div>
+            <input
+              className="lb-comment-name lb-comment-notify"
+              type="email"
+              placeholder="Email me when someone replies (optional)"
+              maxLength={254}
+              value={notifyEmail}
+              onChange={(e) => setNotifyEmail(e.target.value)}
+              aria-label="Email for reply notifications (optional)"
+            />
             <button
               className="lb-comment-submit"
               disabled={posting || !text.trim()}

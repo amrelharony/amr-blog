@@ -77,9 +77,12 @@ export default function ArticleReader({ slug }: { slug: string }) {
         content.insertAdjacentElement("beforebegin", nav);
 
         const toggle = nav.querySelector(".lb-toc-toggle")!;
+        const list = nav.querySelector<HTMLElement>(".lb-toc-list")!;
         toggle.addEventListener("click", () => {
-          nav.classList.toggle("collapsed");
-          toggle.setAttribute("aria-expanded", String(!nav.classList.contains("collapsed")));
+          const collapsed = nav.classList.toggle("collapsed");
+          toggle.setAttribute("aria-expanded", String(!collapsed));
+          // A visually-collapsed list must also leave the tab order / a11y tree.
+          list.toggleAttribute("inert", collapsed);
         });
 
         const tocLinks = Array.from(nav.querySelectorAll<HTMLAnchorElement>(".lb-toc-link"));
@@ -91,6 +94,9 @@ export default function ArticleReader({ slug }: { slug: string }) {
             if (target) {
               target.scrollIntoView({ behavior: "smooth", block: "start" });
               history.replaceState(null, "", "#" + id);
+              // Move keyboard/screen-reader focus along with the scroll.
+              target.tabIndex = -1;
+              target.focus({ preventScroll: true });
             }
           });
         });
@@ -119,6 +125,44 @@ export default function ArticleReader({ slug }: { slug: string }) {
           nav.remove();
         });
       }
+    }
+
+    // ── Copy-code buttons on fenced code blocks ──
+    // The blocks arrive server-rendered (dangerouslySetInnerHTML), so the
+    // button is injected here like the TOC/progress chrome above.
+    if (content) {
+      content.querySelectorAll("pre").forEach((pre) => {
+        if (pre.querySelector(".lb-code-copy")) return;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "lb-code-copy";
+        btn.title = "Copy code";
+        btn.setAttribute("aria-label", "Copy code");
+        btn.innerHTML = '<i class="fa-regular fa-copy" aria-hidden="true"></i>';
+        let timer: number | undefined;
+        const onClick = async () => {
+          const code = pre.querySelector("code")?.textContent || "";
+          try {
+            await navigator.clipboard.writeText(code);
+          } catch {
+            return; // clipboard unavailable — leave the button untouched
+          }
+          btn.classList.add("copied");
+          btn.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i>';
+          window.clearTimeout(timer);
+          timer = window.setTimeout(() => {
+            btn.classList.remove("copied");
+            btn.innerHTML = '<i class="fa-regular fa-copy" aria-hidden="true"></i>';
+          }, 2000);
+        };
+        btn.addEventListener("click", onClick);
+        pre.appendChild(btn);
+        cleanups.push(() => {
+          window.clearTimeout(timer);
+          btn.removeEventListener("click", onClick);
+          btn.remove();
+        });
+      });
     }
 
     // ── Footnote hover tooltips ──

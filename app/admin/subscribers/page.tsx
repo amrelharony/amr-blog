@@ -10,6 +10,8 @@ interface Sub {
   created_at: string;
   confirmed: boolean;
   unsubscribed_at: string | null;
+  /** 'digest' (default) or 'instant' — absent until migration 0013 is applied. */
+  frequency?: string | null;
 }
 
 export default function AdminSubscribers() {
@@ -68,9 +70,11 @@ export default function AdminSubscribers() {
     return `"${s.replace(/"/g, '""')}"`;
   };
   const exportCsv = () => {
-    const header = ["email", "job_title", "confirmed", "unsubscribed", "created_at"].join(",");
+    const header = ["email", "job_title", "confirmed", "unsubscribed", "frequency", "created_at"].join(",");
     const rows = subs.map((s) =>
-      [s.email, s.job_title || "", s.confirmed, !!s.unsubscribed_at, s.created_at].map(csvCell).join(","),
+      [s.email, s.job_title || "", s.confirmed, !!s.unsubscribed_at, s.frequency || "digest", s.created_at]
+        .map(csvCell)
+        .join(","),
     );
     const blob = new Blob([[header, ...rows].join("\r\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
@@ -116,6 +120,7 @@ export default function AdminSubscribers() {
               {s.email}
             </span>
             {s.job_title && <span className="adm-pill">{s.job_title}</span>}
+            {s.frequency === "instant" && <span className="adm-pill live">⚡ instant</span>}
             <span className="adm-pill">{fmtDate(s.created_at)}</span>
             {s.unsubscribed_at ? (
               <span className="adm-pill draft">Unsubscribed</span>

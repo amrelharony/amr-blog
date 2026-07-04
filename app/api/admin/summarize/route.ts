@@ -3,28 +3,15 @@
 // `tldr` column — so it's generated at write time, never per request. Auth
 // mirrors /api/revalidate: a valid admin session (auth.uid() === ADMIN_UUID).
 //
-// Provider defaults to the OpenClaw endpoint (chat.amrelharony.com), reusing the
-// chat route's OPENCLAW_* config so TL;DR works with no extra env. Override with
-// SUMMARY_API_URL / SUMMARY_API_KEY / SUMMARY_MODEL to point at a different
-// OpenAI-compatible provider (e.g. Z.ai GLM).
+// The prompt, provider plumbing, and output cleanup live in lib/ai/ (shared
+// with the batch backfill in scripts/backfill-tldr.mjs and the auto-tagger).
 import { NextRequest } from "next/server";
 import { isAdminUser } from "@/lib/auth/require-admin";
+import { OpenClawError, openclawConfigured } from "@/lib/ai/openclaw";
+import { generateTldr } from "@/lib/ai/summarize";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const SUMMARY_API_URL =
-  process.env.SUMMARY_API_URL ||
-  process.env.OPENCLAW_URL ||
-  "https://chat.amrelharony.com/v1/chat/completions";
-const SUMMARY_API_KEY = process.env.SUMMARY_API_KEY || process.env.OPENCLAW_API_KEY || "";
-const SUMMARY_MODEL = process.env.SUMMARY_MODEL || process.env.OPENCLAW_MODEL || "openclaw";
-
-const MAX_CONTENT = 6000; // chars of article body sent upstream (keeps input in budget)
-const REQUEST_TIMEOUT = 30000;
-
-const SYSTEM_PROMPT =
-  "You write a TL;DR for a blog article by Amr Elharony. Summarize the article below in 2-3 sentences (under 60 words). Speak as Amr in the first person, plainly and concretely. Capture the core thesis and takeaway only — do NOT invent facts, numbers, or links not present in the text. Return plain prose with no preamble, no markdown, no quotes.";
 
 function json(data: unknown, status: number) {
   return new Response(JSON.stringify(data), {
@@ -35,7 +22,7 @@ function json(data: unknown, status: number) {
 
 export async function POST(req: NextRequest) {
   if (!(await isAdminUser())) return json({ error: "Unauthorized" }, 401);
-  if (!SUMMARY_API_KEY) return json({ error: "Summary service not configured" }, 503);
+  if (!openclawConfigured()) return json({ error: "Summary service not configured" }, 503);
 
   let body: { title?: string; content?: string };
   try {
@@ -48,60 +35,17 @@ export async function POST(req: NextRequest) {
   const content = (body.content || "").trim();
   if (content.length < 50) return json({ error: "Article content is too short to summarize." }, 400);
 
-  const userContent = `${title ? `Title: ${title}\n\n` : ""}Article:\n${content.slice(0, MAX_CONTENT)}`;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
-  let upstream: Response;
   try {
-    upstream = await fetch(SUMMARY_API_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${SUMMARY_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: SUMMARY_MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userContent },
-        ],
-        stream: false,
-        max_tokens: 220,
-        temperature: 0.4,
-      }),
-      signal: controller.signal,
-    });
-  } catch {
-    return json({ error: "AI server unreachable" }, 503);
-  } finally {
-    clearTimeout(timeout);
+    const tldr = await generateTldr(title, content);
+    return json({ tldr }, 200);
+  } catch (e) {
+    if (e instanceof OpenClawError) {
+      // Admin-only route, so surface a trimmed upstream reason to aid diagnosis.
+      if (e.status > 0) {
+        return json({ error: e.message, detail: e.detail }, e.status >= 500 ? 503 : 502);
+      }
+      return json({ error: e.message }, 503);
+    }
+    return json({ error: (e as Error).message || "Summary failed" }, 502);
   }
-
-  if (!upstream.ok) {
-    // Admin-only route, so surface a trimmed upstream reason (e.g. balance/quota) to aid diagnosis.
-    let detail = "";
-    try {
-      detail = (await upstream.text()).slice(0, 200);
-    } catch {}
-    return json(
-      { error: `AI request failed (${upstream.status})`, detail },
-      upstream.status >= 500 ? 503 : 502,
-    );
-  }
-
-  let tldr = "";
-  try {
-    const data = await upstream.json();
-    tldr = (data?.choices?.[0]?.message?.content || "").toString();
-  } catch {
-    return json({ error: "Could not parse AI response" }, 502);
-  }
-  // Strip any stray markup/control chars and surrounding quotes the model might add.
-  tldr = tldr
-    .replace(/<[^>]*>/g, "")
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
-    .trim()
-    .replace(/^["'“”]+|["'“”]+$/g, "")
-    .trim();
-
-  if (!tldr) return json({ error: "AI returned an empty summary." }, 502);
-  return json({ tldr }, 200);
 }

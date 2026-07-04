@@ -89,4 +89,21 @@ describe("sanitizeHtml (text-only blog)", () => {
     const fnItem = '<div class="lb-footnote-item" id="fn-1"><span class="lb-footnote-num">1.</span></div>';
     expect(sanitizeHtml(fnItem)).toContain('id="fn-1"');
   });
+
+  // The highlight renderer (lib/markdown/highlight.ts via lib/markdown/parse.ts)
+  // emits pre[data-lang] + hljs token spans — pin that the allowlist keeps them.
+  it("preserves highlighted code blocks (pre data-lang + hljs span classes)", () => {
+    const block =
+      '<pre data-lang="ts"><code class="hljs language-ts">' +
+      '<span class="hljs-keyword">const</span> x = <span class="hljs-string">&quot;hi&quot;</span>' +
+      "</code></pre>";
+    const out = sanitizeHtml(block);
+    expect(out).toContain('data-lang="ts"');
+    expect(out).toContain('class="hljs language-ts"');
+    expect(out).toContain('<span class="hljs-keyword">const</span>');
+  });
+
+  it("keeps data-lang only on pre, not on arbitrary tags", () => {
+    expect(sanitizeHtml('<p data-lang="x">t</p>')).toBe("<p>t</p>");
+  });
 });

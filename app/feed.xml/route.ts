@@ -1,16 +1,26 @@
 // RSS 2.0 feed — ported from api/rss.js. Served at /feed.xml.
+// Full-content: each item carries the sanitized rendered HTML in
+// <content:encoded> (readers get whole articles), excerpt stays in
+// <description>. The render pipeline is the same linear, ReDoS-bounded one the
+// site uses (lib/markdown/parse.ts), run at most once per revalidate hour.
 import { createPublicClient } from "@/lib/supabase/public";
 import { esc } from "@/lib/format";
+import { renderArticleHtml } from "@/lib/markdown/parse";
 
 export const revalidate = 3600;
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://blog.amrelharony.com";
 
+/** CDATA-wrap arbitrary HTML; a literal "]]>" inside is split across sections. */
+function cdata(html: string): string {
+  return `<![CDATA[${html.replace(/\]\]>/g, "]]]]><![CDATA[>")}]]>`;
+}
+
 export async function GET() {
   const sb = createPublicClient();
   const { data } = await sb
     .from("longform_articles")
-    .select("title,slug,excerpt,created_at,tags")
+    .select("title,slug,excerpt,content,created_at,tags")
     .eq("published", true)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -18,6 +28,7 @@ export async function GET() {
     title: string;
     slug: string;
     excerpt: string | null;
+    content: string | null;
     created_at: string;
     tags: string[] | null;
   }[];
@@ -33,6 +44,7 @@ export async function GET() {
       <title>${esc(a.title)}</title>
       <link>${link}</link>
       <description>${esc(a.excerpt || "")}</description>
+      <content:encoded>${cdata(renderArticleHtml(a.content))}</content:encoded>
       <pubDate>${d.toUTCString()}</pubDate>
       <guid>${link}</guid>
       ${cats}
@@ -42,7 +54,7 @@ export async function GET() {
     .join("\n");
 
   const rss = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
 <channel>
   <title>Fintech Bilinguals — Amr Elharony</title>
   <link>${SITE}/</link>

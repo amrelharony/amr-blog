@@ -14,9 +14,13 @@
 // Writes run through the service-role client (lib/supabase/service.ts) because the
 // request has no admin session.
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/service";
+import { generateArticleEmbeddingFailOpen } from "@/lib/embeddings";
+import { autoTagArticleFailOpen } from "@/lib/ai/tags";
+import { runArticleNotify } from "@/lib/newsletter/notify";
 import { slugify } from "@/lib/format";
 import { CATEGORY_LABELS, categoryByLabel } from "@/lib/categories";
 import { slugTakenServer } from "@/lib/queries/admin-articles";
@@ -322,6 +326,19 @@ async function ingest(body: Record<string, unknown>): Promise<NextResponse> {
       if (def) revalidatePath(`/category/${def.slug}`);
     }
   }
+
+  // 13. Post-response enrichment. `after()` runs once the 201 below has been
+  //     sent, so these can never slow down or fail the ingest contract; each
+  //     helper is fail-open (logs and returns on any error). Auto-tagging runs
+  //     first so the embedding covers the final tag-enriched article state —
+  //     order is cosmetic though; the embedding input doesn't include tags.
+  const articleId = data.id;
+  const notifyNow = published;
+  after(async () => {
+    if (tags.length < 2) await autoTagArticleFailOpen(articleId);
+    await generateArticleEmbeddingFailOpen(articleId);
+    if (notifyNow) await runArticleNotify(articleId);
+  });
 
   const site = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "");
   return NextResponse.json(

@@ -13,6 +13,7 @@ import ContinueReading from "@/components/ContinueReading";
 import ForYou from "@/components/ForYou";
 import CollectionsStrip from "@/components/CollectionsStrip";
 import ReaderStats from "@/components/ReaderStats";
+import TrendingStrip from "@/components/TrendingStrip";
 
 // ISR — feed revalidates every 5 min and on-demand via /api/revalidate (tag 'articles').
 export const revalidate = 300;
@@ -78,6 +79,24 @@ export default async function FeedPage() {
         })}
       </nav>
 
+      <nav className="lb-explore-links lb-reveal" aria-label="Explore">
+        <Link href="/archive">
+          <i className="fa-solid fa-box-archive" aria-hidden="true" /> Archive
+        </Link>
+        <Link href="/tags">
+          <i className="fa-solid fa-tags" aria-hidden="true" /> Topics
+        </Link>
+        <Link href="/series">
+          <i className="fa-solid fa-layer-group" aria-hidden="true" /> Series
+        </Link>
+        <Link href="/search">
+          <i className="fa-solid fa-magnifying-glass" aria-hidden="true" /> Search
+        </Link>
+        <Link href="/library">
+          <i className="fa-solid fa-book-bookmark" aria-hidden="true" /> Library
+        </Link>
+      </nav>
+
       <div className="lb-search-wrap lb-reveal" style={{ transitionDelay: ".1s" }}>
         <i className="fa-solid fa-magnifying-glass lb-search-icon" aria-hidden="true" />
         <input
@@ -101,10 +120,15 @@ export default async function FeedPage() {
         </div>
       )}
 
+      <TrendingStrip days={7} count={5} title="TRENDING THIS WEEK" />
+
       <ReaderStats />
       <ContinueReading />
       <ForYou />
       <CollectionsStrip />
+
+      {/* Skip-link landing point (app/layout.tsx renders the link itself). */}
+      <div id="main-content" tabIndex={-1} className="lb-skip-target" />
 
       <main id="lbGrid" role="feed" aria-label="Article list">
         {articles.length === 0 ? (

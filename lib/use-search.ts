@@ -15,7 +15,14 @@ export function useSearch(
     enabled = true,
     delayMs = 300,
     onError,
-  }: { enabled?: boolean; delayMs?: number; onError?: (e: unknown) => void } = {},
+    extraQuery = "",
+  }: {
+    enabled?: boolean;
+    delayMs?: number;
+    onError?: (e: unknown) => void;
+    /** Pre-serialized extra params, e.g. "&category=Fintech" (used by /search). */
+    extraQuery?: string;
+  } = {},
 ) {
   const [res, setRes] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -37,7 +44,9 @@ export function useSearch(
       const ac = new AbortController();
       ctrl.current = ac;
       try {
-        const r = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal: ac.signal });
+        const r = await fetch(`/api/search?q=${encodeURIComponent(query)}${extraQuery}`, {
+          signal: ac.signal,
+        });
         if (!r.ok) throw new Error(`search HTTP ${r.status}`);
         const data = (await r.json()) as SearchResponse;
         if (!ac.signal.aborted) {
@@ -52,7 +61,7 @@ export function useSearch(
       }
     }, delayMs);
     return () => clearTimeout(t);
-  }, [q, enabled, delayMs, onError]);
+  }, [q, enabled, delayMs, onError, extraQuery]);
 
   // Abort any in-flight request when the consumer unmounts.
   useEffect(() => {

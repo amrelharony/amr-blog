@@ -95,6 +95,11 @@ export default function CommandPalette() {
     const allCommands: Item[] = [
       { id: "nav-home", icon: "fa-house", label: "Home", action: { kind: "push", href: "/" } },
       { id: "nav-thoughts", icon: "fa-comment-dots", label: "Thoughts", action: { kind: "push", href: "/thoughts" } },
+      { id: "nav-search", icon: "fa-magnifying-glass", label: "Search page", action: { kind: "push", href: "/search" } },
+      { id: "nav-archive", icon: "fa-box-archive", label: "Archive", action: { kind: "push", href: "/archive" } },
+      { id: "nav-tags", icon: "fa-tags", label: "Topics", action: { kind: "push", href: "/tags" } },
+      { id: "nav-series", icon: "fa-layer-group", label: "Series", action: { kind: "push", href: "/series" } },
+      { id: "nav-library", icon: "fa-book-bookmark", label: "Your library", action: { kind: "push", href: "/library" } },
       { id: "nav-rss", icon: "fa-rss", label: "RSS Feed", action: { kind: "navigate", href: "/feed.xml" } },
       ...(["auto", "light", "dark"] as ThemeMode[]).map<Item>((m) => ({
         id: `theme-${m}`,

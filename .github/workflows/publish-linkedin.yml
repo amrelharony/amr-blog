@@ -32,3 +32,18 @@ jobs:
           LINKEDIN_CLIENT_SECRET: ${{ secrets.LINKEDIN_CLIENT_SECRET }}
           LINKEDIN_REFRESH_TOKEN: ${{ secrets.LINKEDIN_REFRESH_TOKEN }}
         run: node scripts/publish-linkedin.mjs
+
+      # Piggyback on this hourly schedule (the Vercel cron only runs every 3
+      # days): db-keepalive publishes due scheduled articles AND sweeps the
+      # instant-notification queue (see app/api/db-keepalive/route.ts step 5).
+      - name: Run scheduled-publish + notification sweep
+        if: always()
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -n "$CRON_SECRET" ]; then
+            curl -sf -m 60 -H "Authorization: Bearer $CRON_SECRET" \
+              "https://blog.amrelharony.com/api/db-keepalive" || echo "sweep failed (non-fatal)"
+          else
+            echo "CRON_SECRET not set — skipping sweep"
+          fi

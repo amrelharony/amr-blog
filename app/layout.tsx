@@ -10,6 +10,7 @@ import ThemeManager from "@/components/ThemeManager";
 import AmbientColor from "@/components/AmbientColor";
 import CustomCursor from "@/components/CustomCursor";
 import Intro from "@/components/Intro";
+import PwaRegister from "@/components/PwaRegister";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://blog.amrelharony.com";
 
@@ -26,7 +27,13 @@ export const metadata: Metadata = {
   },
   description:
     "Speaking both business and tech: deep dives on fintech, agile, and digital transformation by Amr Elharony.",
-  alternates: { canonical: "/", types: { "application/rss+xml": "/feed.xml" } },
+  alternates: {
+    canonical: "/",
+    types: {
+      "application/rss+xml": "/feed.xml",
+      "application/feed+json": "/feed.json",
+    },
+  },
 };
 
 export const viewport: Viewport = { themeColor: "#06080f" };
@@ -37,6 +44,11 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
+        {/* First focusable element on every page; each page provides the
+            #main-content landing point (visually hidden until focused). */}
+        <a href="#main-content" className="lb-skip-link">
+          Skip to content
+        </a>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <noscript>
           <style dangerouslySetInnerHTML={{ __html: "#blog-intro{display:none!important}" }} />
@@ -57,6 +69,7 @@ export default function RootLayout({
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
         />
         {children}
+        <PwaRegister />
         <SiteControls />
         <CustomCursor />
         <HolidayEngine />
