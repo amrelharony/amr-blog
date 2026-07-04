@@ -1,6 +1,13 @@
 // Newsletter double-opt-in — ported from api/newsletter-confirm.js.
 // GET: user clicked the confirm link. POST: frontend asks us to send the confirm email (Resend).
+// Token/email validation and the confirm-result decision live in
+// lib/newsletter/confirm.ts, where they are unit-tested.
 import { NextRequest, NextResponse } from "next/server";
+import {
+  isValidConfirmToken,
+  isValidConfirmRequest,
+  confirmationSucceeded,
+} from "@/lib/newsletter/confirm";
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -29,21 +36,15 @@ async function rpc(fn: string, params: unknown) {
 
 export async function GET(req: NextRequest) {
   const token = new URL(req.url).searchParams.get("token");
-  if (!token || token.length > 500 || !/^[\w-]+$/.test(token)) {
+  if (!isValidConfirmToken(token)) {
     return page("Invalid Link", `<div class="icon">⚠️</div><div class="title">Invalid Link</div><div class="sub">This confirmation link is missing or malformed.</div><a class="btn" href="${SITE}">Go to Blog</a>`);
   }
   const res = await rpc("confirm_newsletter", { p_token: token });
-  // confirm_newsletter returns a boolean — false for an unknown/expired/used token —
-  // and PostgREST replies HTTP 200 even when it returns false, so res.ok alone isn't a
-  // success signal. Treat ONLY an explicit `false` as failure so any other return shape
-  // can't regress valid confirmations.
-  let confirmed = res.ok;
-  if (res.ok) {
-    try {
-      if ((await res.json()) === false) confirmed = false;
-    } catch {}
-  }
-  if (!confirmed) {
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {}
+  if (!confirmationSucceeded(res.ok, body)) {
     return page("Invalid or Expired", `<div class="icon">⚠️</div><div class="title">Invalid or Expired Link</div><div class="sub">This confirmation link may have expired. Please subscribe again.</div><a class="btn" href="${SITE}">Subscribe Again</a>`);
   }
   return page("Subscription Confirmed", `<div class="icon">✅</div><div class="title">You're In!</div><div class="sub">Your subscription is confirmed. You'll receive a biweekly digest of new articles from Amr Elharony.</div><a class="btn" href="${SITE}">Read Articles</a>`);
@@ -52,13 +53,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const { email, token } = await req.json();
-    if (
-      typeof email !== "string" ||
-      email.length > 254 ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-      typeof token !== "string" ||
-      !/^[0-9a-f-]{36}$/i.test(token)
-    ) {
+    if (!isValidConfirmRequest(email, token)) {
       return NextResponse.json({ error: "Invalid email or token" }, { status: 400 });
     }
     const validateRes = await rpc("validate_pending_subscription", { p_email: email, p_token: token });

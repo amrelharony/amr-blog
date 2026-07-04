@@ -7,6 +7,8 @@ import { searchArticles, matchArticlesByVector } from "@/lib/queries/articles";
 import { searchThoughts } from "@/lib/queries/microblog";
 import { categoryByLabel } from "@/lib/categories";
 import { embedText } from "@/lib/embeddings";
+import { createIpWindow, clientIpFrom } from "@/lib/rate-limit/ip-window";
+import { logEvent } from "@/lib/log";
 import {
   EMPTY_SEARCH_RESPONSE,
   buildSnippet,
@@ -35,11 +37,29 @@ export const runtime = "nodejs";
 
 const CACHE_OK = "public, s-maxage=60, stale-while-revalidate=300";
 
+// Per-IP backstop against cache-busting floods (unique q= strings bypass the
+// CDN). In-memory/per-instance by design — see lib/rate-limit/ip-window.ts.
+const limiter = createIpWindow({ limit: 60, windowMs: 60_000 });
+
 function json(body: SearchResponse, cacheControl: string) {
   return Response.json(body, { headers: { "Cache-Control": cacheControl } });
 }
 
 export async function GET(request: NextRequest) {
+  const ip = clientIpFrom(request.headers);
+  const gate = limiter.check(ip);
+  if (!gate.allowed) {
+    logEvent("search.rate_limited", { ip });
+    return Response.json(
+      { error: "rate_limited" },
+      {
+        status: 429,
+        // no-store is critical: a cached 429 would poison the shared CDN entry.
+        headers: { "Retry-After": String(gate.retryAfterSec), "Cache-Control": "no-store" },
+      },
+    );
+  }
+
   const q = sanitizeSearchQuery(request.nextUrl.searchParams.get("q") || "");
   if (q.length < 2) return json(EMPTY_SEARCH_RESPONSE, CACHE_OK);
   // Optional category narrowing (used by /search). Unknown labels → no filter.

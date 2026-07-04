@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveLimits, rateLimitHeaders } from "./rate-limit";
+import { resolveLimits, rateLimitHeaders, isDecision } from "./rate-limit";
 
 // Regression guard for the chat "message limit on every message" bug: the route called
 // check_chat_rate_limit with a p_user_id arg the DB function doesn't accept, so the RPC
@@ -36,6 +36,31 @@ describe("resolveLimits", () => {
     const r = resolveLimits([{ allowed: false, weekly_used: 100, weekly_max: 100 }]);
     expect(r.allowed).toBe(false);
     expect(r.weekly_used).toBe(100);
+  });
+});
+
+describe("isDecision", () => {
+  it("is true only for a row (or one-row array) with a boolean `allowed`", () => {
+    expect(isDecision({ allowed: true })).toBe(true);
+    expect(isDecision({ allowed: false, daily_used: 25 })).toBe(true);
+    expect(isDecision([{ allowed: false }])).toBe(true);
+  });
+
+  it("is false for every fail-open fallback shape", () => {
+    expect(isDecision(null)).toBe(false);
+    expect(isDecision(undefined)).toBe(false);
+    expect(isDecision([])).toBe(false);
+    expect(isDecision({ daily_used: 3 })).toBe(false); // counters without a decision
+    expect(isDecision({ allowed: "yes" })).toBe(false); // non-boolean
+    expect(isDecision(true)).toBe(false);
+    expect(isDecision("nope")).toBe(false);
+  });
+
+  it("agrees with resolveLimits: no decision means fail-open", () => {
+    for (const shape of [null, [], { daily_used: 1 }, "x"]) {
+      expect(isDecision(shape)).toBe(false);
+      expect(resolveLimits(shape).allowed).toBe(true);
+    }
   });
 });
 
