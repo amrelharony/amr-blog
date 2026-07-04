@@ -3,7 +3,11 @@
 // (session-authed /api/admin/newsletter) reuse one send() path and one HTML
 // builder — no duplicated logic, and bulletin_log is written identically.
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+// Service-role key, NOT the anon key: the bulletin RPCs return subscriber
+// emails and mutate bulletin_log, so their EXECUTE is revoked from anon/
+// authenticated (db/migrations/0015). This module only ever runs server-side
+// (secret-authed cron route + session-authed admin route), never in a browser.
+const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://blog.amrelharony.com";
 const BATCH = 90;
 
@@ -86,6 +90,7 @@ async function rpcAll<T>(fn: string, params?: unknown): Promise<T[]> {
 export async function runBulletinSend(): Promise<{ status: number; result: BulletinResult }> {
   const RESEND_KEY = process.env.RESEND_API_KEY;
   if (!RESEND_KEY) return { status: 500, result: { error: "RESEND_API_KEY not configured" } };
+  if (!SB_KEY) return { status: 500, result: { error: "SUPABASE_SERVICE_ROLE_KEY not configured" } };
 
   type Batch = { id: string; recipient_count: number; batch_remaining: number; articles_since: string };
   const claimed = await rpc<Batch[]>("claim_pending_bulletin", {});
