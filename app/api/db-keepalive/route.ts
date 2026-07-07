@@ -77,10 +77,14 @@ export async function GET(req: NextRequest) {
           notified++;
         }
       }
+      // Offer both 'pending' (resume) and 'in_progress' (potentially wedged) rows;
+      // runArticleNotify's resolveClaim decides whether a run is stale enough to
+      // reclaim, so a fresh in_progress run is simply skipped. Without in_progress
+      // here, a wedged row would never be revisited and the reclaim path is dead.
       const { data: pend } = await svc
         .from("article_notification_log")
         .select("article_id")
-        .eq("status", "pending")
+        .in("status", ["pending", "in_progress"])
         .limit(10);
       for (const p of pend ?? []) {
         await runArticleNotify((p as { article_id: string }).article_id);

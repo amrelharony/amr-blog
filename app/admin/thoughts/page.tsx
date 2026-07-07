@@ -83,14 +83,22 @@ export default function AdminThoughts() {
   };
 
   const togglePin = async (t: Thought) => {
-    await sb.from("microblog").update({ pinned: !t.pinned }).eq("id", t.id);
+    const { error } = await sb.from("microblog").update({ pinned: !t.pinned }).eq("id", t.id);
+    if (error) {
+      setMsg({ t: "Failed: " + error.message, ok: false });
+      return;
+    }
     await logActivity(sb, t.pinned ? "unpin" : "pin", "thought", t.id, (t.content || "").slice(0, 60));
     await revalidate();
     load();
   };
   const del = async (id: string) => {
     if (!confirm("Delete this thought?")) return;
-    await sb.from("microblog").delete().eq("id", id);
+    const { error } = await sb.from("microblog").delete().eq("id", id);
+    if (error) {
+      setMsg({ t: "Failed: " + error.message, ok: false });
+      return;
+    }
     await logActivity(sb, "delete", "thought", id, "");
     await revalidate();
     load();

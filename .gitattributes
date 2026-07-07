@@ -1,2 +1,7 @@
-
 *.glb binary
+
+# Byte-exact vendored asset: lib/pdf-worker.test.ts compares this committed copy
+# against node_modules/pdfjs-dist's build worker. Without -text, autocrlf on
+# Windows checkouts rewrites its line endings (CRLF vs the npm copy's LF) and the
+# integrity test fails on a clean tree. Keep git from touching it.
+public/pdf.worker.min.mjs -text

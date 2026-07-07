@@ -2,6 +2,9 @@
 // so BOTH the Vercel-cron route (secret-authed) and the new admin console
 // (session-authed /api/admin/newsletter) reuse one send() path and one HTML
 // builder — no duplicated logic, and bulletin_log is written identically.
+import { logEvent } from "@/lib/log";
+import { withRetry } from "@/lib/retry";
+
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 // Service-role key, NOT the anon key: the bulletin RPCs return subscriber
 // emails and mutate bulletin_log, so their EXECUTE is revoked from anon/
@@ -163,7 +166,18 @@ export async function runBulletinSend(): Promise<{ status: number; result: Bulle
     }
   }
 
-  await rpc("update_bulletin_log", { p_id: logId, p_batch_remaining: Math.max(0, remaining), p_status: remaining > 0 ? "pending" : "sent" });
+  // Emails for this batch are already out. If this write is lost the run stays
+  // 'in_progress' and the 2h stale reclaim (claim_pending_bulletin) will re-send
+  // the whole batch — so retry a few times before surfacing the failure.
+  try {
+    await withRetry(
+      () => rpc("update_bulletin_log", { p_id: logId, p_batch_remaining: Math.max(0, remaining), p_status: remaining > 0 ? "pending" : "sent" }),
+      { attempts: 3, delaysMs: [300, 1200] },
+    );
+  } catch (e) {
+    logEvent("bulletin.update_log_failed", { logId, remaining: Math.max(0, remaining), sent, message: (e as Error).message });
+    throw e; // route already logs cron.bulletin.error and returns 500
+  }
 
   return {
     status: 200,

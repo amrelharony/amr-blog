@@ -11,13 +11,17 @@ export async function logActivity(
   summary: string,
 ): Promise<void> {
   try {
-    await sb.from("activity_log").insert({
+    // supabase-js does NOT throw on PostgREST/RLS errors — check the returned
+    // error too, so a silently-broken audit trail (e.g. an insert-policy
+    // regression) is at least visible in logs. Still never throws.
+    const { error } = await sb.from("activity_log").insert({
       action,
       entity_type: entityType,
       entity_id: entityId || null,
       summary: summary.slice(0, 300),
     });
-  } catch {
-    /* swallow — logging is non-critical */
+    if (error) console.warn("[activity] insert failed:", error.message);
+  } catch (e) {
+    console.warn("[activity] insert threw:", e instanceof Error ? e.message : e);
   }
 }
