@@ -1,5 +1,6 @@
 // Image proxy for Supabase storage — ported from api/cover-proxy.js (SSRF-guarded).
 import { NextRequest } from "next/server";
+import { logEvent } from "@/lib/log";
 
 export const runtime = "edge";
 
@@ -30,8 +31,9 @@ export async function GET(req: NextRequest) {
     // redirect:"manual" so a 3xx off the allow-listed host can't be followed to
     // an arbitrary target — the host check above only validates the initial URL.
     imgRes = await fetch(imageUrl, { signal: ctrl.signal, redirect: "manual" });
-  } catch {
+  } catch (e) {
     clearTimeout(timer);
+    logEvent("coverproxy.fetch_failed", { stage: "fetch", message: e instanceof Error ? e.message : String(e) });
     return new Response("Failed to fetch image", { status: 502 });
   }
   clearTimeout(timer);
@@ -60,7 +62,8 @@ export async function GET(req: NextRequest) {
       }
       chunks.push(value);
     }
-  } catch {
+  } catch (e) {
+    logEvent("coverproxy.fetch_failed", { stage: "stream", message: e instanceof Error ? e.message : String(e) });
     return new Response("Failed to fetch image", { status: 502 });
   }
   const body = new Uint8Array(bytes);

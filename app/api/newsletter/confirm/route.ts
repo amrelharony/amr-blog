@@ -75,7 +75,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid email or token" }, { status: 400 });
     }
     const validateRes = await rpc("validate_pending_subscription", { p_email: email, p_token: token });
-    if (!validateRes.ok) return NextResponse.json({ error: "Validation failed" }, { status: 502 });
+    if (!validateRes.ok) {
+      logEvent("newsletter.confirm.validate_failed", { status: validateRes.status });
+      return NextResponse.json({ error: "Validation failed" }, { status: 502 });
+    }
     if ((await validateRes.json()) !== true) return NextResponse.json({ ok: true }); // indistinguishable
 
     const RESEND_KEY = process.env.RESEND_API_KEY;
@@ -92,9 +95,13 @@ export async function POST(req: NextRequest) {
         html: confirmEmail(confirmUrl),
       }),
     });
-    if (!emailRes.ok) return NextResponse.json({ error: "Failed to send email" }, { status: 502 });
+    if (!emailRes.ok) {
+      logEvent("newsletter.confirm.send_failed", { status: emailRes.status });
+      return NextResponse.json({ error: "Failed to send email" }, { status: 502 });
+    }
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (e) {
+    logEvent("newsletter.confirm.error", { message: e instanceof Error ? e.message : String(e) });
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

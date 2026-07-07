@@ -9,6 +9,7 @@ import { NextRequest } from "next/server";
 import { isAdminUser } from "@/lib/auth/require-admin";
 import { OpenClawError, openclawConfigured } from "@/lib/ai/openclaw";
 import { generateTldr } from "@/lib/ai/summarize";
+import { logEvent } from "@/lib/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,6 +40,11 @@ export async function POST(req: NextRequest) {
     const tldr = await generateTldr(title, content);
     return json({ tldr }, 200);
   } catch (e) {
+    logEvent("admin.summarize.failed", {
+      openclaw: e instanceof OpenClawError,
+      status: e instanceof OpenClawError ? e.status : undefined,
+      message: (e as Error).message,
+    });
     if (e instanceof OpenClawError) {
       // Admin-only route, so surface a trimmed upstream reason to aid diagnosis.
       if (e.status > 0) {
