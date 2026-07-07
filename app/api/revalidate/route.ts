@@ -4,10 +4,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { isAdminUser } from "@/lib/auth/require-admin";
+import { secretMatches } from "@/lib/auth/secret";
 
 async function authorized(req: NextRequest): Promise<boolean> {
-  const secret = req.headers.get("x-revalidate-secret");
-  if (secret && process.env.REVALIDATE_SECRET && secret === process.env.REVALIDATE_SECRET) return true;
+  // Constant-time compare (fails closed when REVALIDATE_SECRET is unset).
+  if (secretMatches(req.headers.get("x-revalidate-secret"), process.env.REVALIDATE_SECRET)) return true;
   return isAdminUser();
 }
 

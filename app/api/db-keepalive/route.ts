@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { logEvent } from "@/lib/log";
+import { secretMatches, bearerToken } from "@/lib/auth/secret";
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -16,9 +17,7 @@ export async function GET(req: NextRequest) {
   // Require the cron secret: Vercel auto-sends `Authorization: Bearer $CRON_SECRET` on
   // scheduled invocations when CRON_SECRET is set. The vercel-cron User-Agent is
   // client-spoofable, so it is not an authentication factor.
-  const cronSecret = process.env.CRON_SECRET;
-  const auth = req.headers.get("authorization") || "";
-  if (!cronSecret || auth !== `Bearer ${cronSecret}`)
+  if (!secretMatches(bearerToken(req.headers.get("authorization")), process.env.CRON_SECRET))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const started = Date.now();
