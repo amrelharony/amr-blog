@@ -245,3 +245,25 @@
   max-width: 360px;
   margin: 12vh auto 0;
 }
+
+/* Loading skeletons (the loading.tsx shells). With loading.tsx present, Next
+   partially prefetches these dynamic routes so tab switches paint a shimmer
+   immediately instead of a dead frame (unstable_instant needs cacheComponents,
+   which this project doesn't enable — see the instant-navigation guide). */
+.adm-skel {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: adm-shimmer 1.4s infinite;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+@keyframes adm-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}

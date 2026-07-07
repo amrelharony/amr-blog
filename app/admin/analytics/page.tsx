@@ -1,5 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { getTrendingArticles } from "@/lib/queries/trending";
+import {
+  aggregateCategories,
+  aggregateTags,
+  fetchAllArticleFacts,
+  fetchViewSeries,
+  type ArticleFact,
+  type DayPoint,
+} from "@/lib/queries/admin-analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -23,13 +33,38 @@ function fmtDuration(seconds: number): string {
   return `${Math.floor(s / 60)}m ${s % 60}s`;
 }
 
+/** Horizontal sparkbar shared by the leaderboard-style cards. */
+function Bar({ value, max }: { value: number; max: number }) {
+  return (
+    <div style={{ height: 6, background: "rgba(255,255,255,.06)", borderRadius: 3, overflow: "hidden" }}>
+      <div
+        style={{
+          height: "100%",
+          width: `${Math.round((value / Math.max(1, max)) * 100)}%`,
+          background: "var(--accent)",
+        }}
+      />
+    </div>
+  );
+}
+
+// The view-per-day widget needs the SERVICE-ROLE client (article_view_daily has
+// no RLS policies) and must never take the page down with it: no key, no chart.
+async function safeViewSeries(days: number): Promise<DayPoint[] | null> {
+  try {
+    return await fetchViewSeries(createServiceClient(), days);
+  } catch {
+    return null;
+  }
+}
+
 export default async function AdminAnalytics() {
   await requireAdmin(); // backstop behind proxy.ts — don't render on RLS alone
   const sb = await createClient();
 
   // Top-20 stays a leaderboard; the headline TOTALS now come from a real SUM RPC
   // (the page previously summed only these 20 rows, badly undercounting ~3000).
-  const [topRes, totalsRes, engRes, growthRes] = await Promise.all([
+  const [topRes, totalsRes, engRes, growthRes, facts, trending, viewSeries] = await Promise.all([
     sb
       .from("longform_articles")
       .select("title,slug,views,reactions,published")
@@ -38,6 +73,9 @@ export default async function AdminAnalytics() {
     sb.rpc("get_content_totals"),
     sb.rpc("get_reading_engagement"),
     sb.rpc("get_subscriber_growth", { p_weeks: 12 }),
+    fetchAllArticleFacts(sb).catch(() => null as ArticleFact[] | null),
+    getTrendingArticles(7, 10),
+    safeViewSeries(30),
   ]);
 
   const arts = (topRes.data || []) as ArtStat[];
@@ -49,8 +87,15 @@ export default async function AdminAnalytics() {
     unsub_count: number;
   }[];
 
+  const categories = facts ? aggregateCategories(facts) : null;
+  const tags = facts ? aggregateTags(facts, 15) : null;
+
   const maxViews = Math.max(1, ...arts.map((a) => a.views || 0));
   const maxNew = Math.max(1, ...growth.map((g) => n(g.new_count)));
+  const maxTrend = Math.max(1, ...trending.map((a) => n(a.recent_views)));
+  const maxCatViews = Math.max(1, ...(categories || []).map((c) => c.totalViews));
+  const maxTagCount = Math.max(1, ...(tags || []).map((tg) => tg.count));
+  const maxDay = Math.max(1, ...(viewSeries || []).map((d) => d.views));
 
   const cards = [
     { num: n(t.total_views).toLocaleString(), label: "Total article views" },
@@ -58,6 +103,12 @@ export default async function AdminAnalytics() {
     { num: n(t.published_count).toLocaleString(), label: "Published" },
     { num: n(t.draft_count).toLocaleString(), label: "Drafts" },
   ];
+
+  const factsError = (
+    <div className="adm-sub" style={{ marginTop: 12 }}>
+      Couldn&apos;t load the article library — reload to retry.
+    </div>
+  );
 
   return (
     <div>
@@ -100,6 +151,102 @@ export default async function AdminAnalytics() {
       </div>
 
       <div className="adm-card">
+        <div className="adm-label">Trending now (last 7 days)</div>
+        <div className="adm-sub" style={{ marginBottom: 0 }}>
+          Published articles by recent views — the same ranking the homepage shows.
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+          {trending.length === 0 && <div className="adm-sub">No recent view data yet.</div>}
+          {trending.map((a) => (
+            <div key={a.slug}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 12 }}>
+                  <a href={`/p/${a.slug}`} target="_blank" rel="noreferrer" style={{ color: "inherit" }}>
+                    {a.title}
+                  </a>
+                </span>
+                <span style={{ fontFamily: "'JetBrains Mono',monospace", color: "var(--sub)", whiteSpace: "nowrap" }}>
+                  🔥 {n(a.recent_views).toLocaleString()} · 👁 {n(a.views).toLocaleString()}
+                </span>
+              </div>
+              <Bar value={n(a.recent_views)} max={maxTrend} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="adm-card">
+        <div className="adm-label">Category breakdown</div>
+        {!categories && factsError}
+        {categories && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+            {categories.map((c) => (
+              <div key={c.label}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, marginBottom: 4, gap: 8 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.label}</span>
+                    <span className="adm-pill">{c.articles.toLocaleString()} articles</span>
+                    <span className="adm-pill live">{c.published.toLocaleString()} live</span>
+                  </span>
+                  <span style={{ fontFamily: "'JetBrains Mono',monospace", color: "var(--sub)", whiteSpace: "nowrap" }}>
+                    👁 {c.totalViews.toLocaleString()} · {c.avgViews.toLocaleString()}/article
+                  </span>
+                </div>
+                <Bar value={c.totalViews} max={maxCatViews} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="adm-card">
+        <div className="adm-label">Top tags</div>
+        {!tags && factsError}
+        {tags && tags.length === 0 && <div className="adm-sub" style={{ marginTop: 12 }}>No tags yet.</div>}
+        {tags && tags.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+            {tags.map((tg) => (
+              <div key={tg.tag}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, marginBottom: 4, gap: 8 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <span className="adm-pill">{tg.tag}</span>
+                    <span style={{ color: "var(--sub)", fontSize: 12 }}>{tg.count.toLocaleString()} articles</span>
+                  </span>
+                  <span style={{ fontFamily: "'JetBrains Mono',monospace", color: "var(--sub)", whiteSpace: "nowrap" }}>
+                    👁 {tg.views.toLocaleString()}
+                  </span>
+                </div>
+                <Bar value={tg.count} max={maxTagCount} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {viewSeries && (
+        <div className="adm-card">
+          <div className="adm-label">Views per day (last 30 days, UTC)</div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 90, marginTop: 14 }}>
+            {viewSeries.map((d, i) => (
+              <div key={d.day} style={{ flex: 1, textAlign: "center" }} title={`${d.day} · ${d.views.toLocaleString()} views`}>
+                <div
+                  style={{
+                    height: `${Math.round((d.views / maxDay) * 70)}px`,
+                    background: "var(--accent)",
+                    borderRadius: "3px 3px 0 0",
+                    minHeight: 2,
+                  }}
+                />
+                <div style={{ fontSize: 8, color: "var(--sub)", marginTop: 4, fontFamily: "'JetBrains Mono',monospace" }}>
+                  {i % 5 === 0 ? d.day.slice(5) : " "}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="adm-card">
         <div className="adm-label">Subscriber growth (last 12 weeks)</div>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 90, marginTop: 14 }}>
           {growth.map((g) => (
@@ -130,19 +277,11 @@ export default async function AdminAnalytics() {
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 12 }}>
                   {a.title} {!a.published && <em style={{ color: "var(--sub)" }}>(draft)</em>}
                 </span>
-                <span style={{ fontFamily: "'JetBrains Mono',monospace", color: "var(--sub)" }}>
+                <span style={{ fontFamily: "'JetBrains Mono',monospace", color: "var(--sub)", whiteSpace: "nowrap" }}>
                   👁 {a.views || 0} · ❤ {rxSum(a.reactions)}
                 </span>
               </div>
-              <div style={{ height: 6, background: "rgba(255,255,255,.06)", borderRadius: 3, overflow: "hidden" }}>
-                <div
-                  style={{
-                    height: "100%",
-                    width: `${Math.round(((a.views || 0) / maxViews) * 100)}%`,
-                    background: "var(--accent)",
-                  }}
-                />
-              </div>
+              <Bar value={a.views || 0} max={maxViews} />
             </div>
           ))}
         </div>
