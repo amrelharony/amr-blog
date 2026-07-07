@@ -17,6 +17,23 @@ simply stays dormant until its schema/config exists.
 
 ## Manual steps, in order
 
+### 0. Probe what's already live (read-only)
+
+Before touching the dashboard, see which steps are actually applied:
+
+```
+node scripts/rollout/verify-rollout.mjs
+```
+
+It issues only GETs / `stable` RPC probes (never mutates) and prints a
+PASS/FAIL/SKIP/MANUAL line per migration, plus embed-function reachability,
+backfill counts, and the subscriber frequency split. It detects each migration
+by a schema marker; it CANNOT read function bodies, so 0015's
+`claim_pending_bulletin` and `get_bulletin_subscribers` show `MANUAL`. As of the
+last probe (2026-07), **0011–0014 are live, the embed function is reachable, and
+embeddings + TL;DRs are 100% backfilled** on production; the remaining work is
+0015's function body.
+
 ### 1. Apply migrations in the Supabase dashboard (SQL editor)
 
 Run in numeric order; each is idempotent (`if not exists` / `create or replace`):
@@ -28,6 +45,12 @@ Run in numeric order; each is idempotent (`if not exists` / `create or replace`)
      add `and coalesce(s.frequency, 'digest') = 'digest'` to its WHERE clause
      so instant subscribers aren't double-mailed by the digest.
 4. `db/migrations/0014_comment_reply_notifications.sql` — comment subscriptions + `post_article_comment` with `p_notify_email` *(Phase 10)*
+5. `db/migrations/0015_bulletin_claim_and_grants.sql` — `claim_pending_bulletin`
+   (stamps `sent_at` on claim), the `idx_bulletin_in_progress` concurrency
+   guard, and the anon/authenticated EXECUTE revokes on the bulletin RPCs.
+   - ⚠ The LIVE `claim_pending_bulletin` is known to carry the sent_at drift bug
+     until this is re-applied. The probe can't see function bodies, so **re-apply
+     0015 unconditionally** — it is `create or replace` + idempotent grants.
 
 ### 2. Deploy the embeddings Edge Function (Phase 4)
 
@@ -71,6 +94,10 @@ Both filter on missing values, so re-running resumes automatically.
 
 ## Verification checklist (post-deploy)
 
+- Run `node scripts/rollout/verify-rollout.mjs` — 0011–0014 + embed-function
+  checks PASS, backfills report "done", and only the two 0015/​bulletin
+  function-body items show MANUAL (re-apply 0015 and eyeball those bodies).
+- `get_bulletin_subscribers` frequency filter is live: after 0013, a subscriber with `frequency='instant'` must NOT appear in a digest preview (admin newsletter console → Preview shows only digest subscribers).
 - Article page: breadcrumbs render; copy-link button copies; TL;DR card says "Key takeaways"; Read-next card appears; code blocks are highlighted with a copy button.
 - `/archive`, `/tags`, `/series`, `/search`, `/library` all load; command palette (⌘K) lists them.
 - After migration 0011 + backfill: related articles change from recency/tag-based to semantic; `select count(*) from longform_articles where embedding is not null` grows.
