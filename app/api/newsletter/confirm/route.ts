@@ -8,6 +8,14 @@ import {
   isValidConfirmRequest,
   confirmationSucceeded,
 } from "@/lib/newsletter/confirm";
+import { createIpWindow, clientIpFrom } from "@/lib/rate-limit/ip-window";
+import { logEvent } from "@/lib/log";
+
+// The POST resends a confirmation email via Resend. Without a cap, a loop of
+// (victim-email, token) pairs turns this into an inbox-bombing relay. Per-IP
+// in-memory window (per-instance on Vercel — blunts the loop; Resend's own
+// limits are the outer backstop). Reads/GET confirms are unaffected.
+const resendLimiter = createIpWindow({ limit: 3, windowMs: 10 * 60_000 });
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -52,12 +60,25 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = clientIpFrom(req.headers);
+    const rl = resendLimiter.check(ip);
+    if (!rl.allowed) {
+      logEvent("newsletter.confirm.rate_limited", { ip });
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } },
+      );
+    }
+
     const { email, token } = await req.json();
     if (!isValidConfirmRequest(email, token)) {
       return NextResponse.json({ error: "Invalid email or token" }, { status: 400 });
     }
     const validateRes = await rpc("validate_pending_subscription", { p_email: email, p_token: token });
-    if (!validateRes.ok) return NextResponse.json({ error: "Validation failed" }, { status: 502 });
+    if (!validateRes.ok) {
+      logEvent("newsletter.confirm.validate_failed", { status: validateRes.status });
+      return NextResponse.json({ error: "Validation failed" }, { status: 502 });
+    }
     if ((await validateRes.json()) !== true) return NextResponse.json({ ok: true }); // indistinguishable
 
     const RESEND_KEY = process.env.RESEND_API_KEY;
@@ -74,9 +95,13 @@ export async function POST(req: NextRequest) {
         html: confirmEmail(confirmUrl),
       }),
     });
-    if (!emailRes.ok) return NextResponse.json({ error: "Failed to send email" }, { status: 502 });
+    if (!emailRes.ok) {
+      logEvent("newsletter.confirm.send_failed", { status: emailRes.status });
+      return NextResponse.json({ error: "Failed to send email" }, { status: 502 });
+    }
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (e) {
+    logEvent("newsletter.confirm.error", { message: e instanceof Error ? e.message : String(e) });
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

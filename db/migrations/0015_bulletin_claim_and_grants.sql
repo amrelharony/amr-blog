@@ -38,7 +38,10 @@ as $$
 begin
   return query
   update public.bulletin_log b
-     set status = 'in_progress'
+     -- Stamp sent_at as the claim heartbeat: without it a just-claimed run keeps
+     -- its old sent_at and can instantly re-satisfy the >2h staleness predicate
+     -- below, letting a concurrent call re-claim it and double-send the batch.
+     set status = 'in_progress', sent_at = now()
    where b.id = (
      select b2.id
        from public.bulletin_log b2

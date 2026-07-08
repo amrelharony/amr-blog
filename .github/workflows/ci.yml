@@ -1,11 +1,10 @@
-# Quality gates: lint + typecheck + unit tests on every push/PR.
+# Quality gates: lint + typecheck + unit tests on every push/PR, plus a build.
 #
-# There is intentionally NO `next build` step: the build prerenders /, /p/[slug],
-# /feed.xml and /sitemap.xml, all of which fetch live data from Supabase
-# (lib/supabase/public.ts requires NEXT_PUBLIC_SUPABASE_URL/_ANON_KEY and
-# network access; the queries throw on failure, failing the build). Vercel
-# remains the real build gate. To add a CI build later, set the two secrets
-# below and uncomment the build job.
+# The build prerenders /, /p/[slug], /feed.xml and /sitemap.xml, which fetch
+# live data from Supabase (lib/supabase/public.ts needs the two NEXT_PUBLIC_*
+# vars + network; queries throw on failure). It therefore requires the two repo
+# secrets referenced in the `build` job — the anon key is public by design.
+# If those secrets are absent the build job fails; Vercel remains the deploy gate.
 name: CI
 
 on:
@@ -34,18 +33,19 @@ jobs:
         with:
           name: coverage
           path: coverage/lcov.info
-          if-no-files-found: ignore
+          # warn (not ignore) so a vitest crash that skips lcov generation is visible.
+          if-no-files-found: warn
 
-  # build:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-node@v4
-  #       with:
-  #         node-version: "22"
-  #         cache: npm
-  #     - run: npm ci
-  #     - run: npm run build
-  #       env:
-  #         NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-  #         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}

@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runBulletinSend } from "@/lib/newsletter/send";
 import { logEvent } from "@/lib/log";
+import { secretMatches, bearerToken } from "@/lib/auth/secret";
 
 export const maxDuration = 60;
 
@@ -39,16 +40,13 @@ export async function GET(req: NextRequest) {
   // Vercel auto-attaches `Authorization: Bearer $CRON_SECRET` to cron invocations when
   // CRON_SECRET is set. The vercel-cron User-Agent is attacker-spoofable, so it must
   // NEVER be sufficient on its own to trigger this email-dispatching send.
-  const cronSecret = process.env.CRON_SECRET;
-  const auth = req.headers.get("authorization") || "";
-  if (!cronSecret || auth !== `Bearer ${cronSecret}`)
+  if (!secretMatches(bearerToken(req.headers.get("authorization")), process.env.CRON_SECRET))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   return loggedSend("cron");
 }
 
 export async function POST(req: NextRequest) {
-  const secret = process.env.NEWSLETTER_ADMIN_SECRET;
-  if (!secret || req.headers.get("x-admin-secret") !== secret)
+  if (!secretMatches(req.headers.get("x-admin-secret"), process.env.NEWSLETTER_ADMIN_SECRET))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   return loggedSend("manual");
 }

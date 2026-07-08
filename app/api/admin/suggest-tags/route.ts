@@ -6,6 +6,7 @@ import { NextRequest } from "next/server";
 import { isAdminUser } from "@/lib/auth/require-admin";
 import { OpenClawError, openclawConfigured } from "@/lib/ai/openclaw";
 import { suggestTags } from "@/lib/ai/tags";
+import { logEvent } from "@/lib/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +44,11 @@ export async function POST(req: NextRequest) {
     });
     return json({ tags }, 200);
   } catch (e) {
+    logEvent("admin.suggest_tags.failed", {
+      openclaw: e instanceof OpenClawError,
+      status: e instanceof OpenClawError ? e.status : undefined,
+      message: (e as Error).message,
+    });
     if (e instanceof OpenClawError) {
       if (e.status > 0) {
         return json({ error: e.message, detail: e.detail }, e.status >= 500 ? 503 : 502);

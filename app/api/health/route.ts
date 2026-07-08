@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openclawConfigured } from "@/lib/ai/openclaw";
 import { checkEnv } from "@/lib/env";
+import { secretMatches, bearerToken } from "@/lib/auth/secret";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -74,9 +75,7 @@ async function probeEmbed(): Promise<Probe> {
 export async function GET(req: NextRequest) {
   const ts = new Date().toISOString();
 
-  const cronSecret = process.env.CRON_SECRET;
-  const auth = req.headers.get("authorization") || "";
-  const authed = Boolean(cronSecret) && auth === `Bearer ${cronSecret}`;
+  const authed = secretMatches(bearerToken(req.headers.get("authorization")), process.env.CRON_SECRET);
 
   if (!authed) {
     const supabase = await probeSupabase();

@@ -143,6 +143,21 @@ async function main() {
     "run section 4/5",
   );
 
+  // ---- 0015: bulletin claim + grants ----------------------------------------
+  await probeSelect(
+    "0015 bulletin_log.batch_remaining column",
+    "bulletin_log?select=batch_remaining&limit=1",
+    "run db/migrations/0015_bulletin_claim_and_grants.sql",
+  );
+  // The claim_pending_bulletin BODY (sent_at-on-claim fix) and idx_bulletin_in_progress
+  // can't be introspected over PostgREST, and calling the RPC would mutate — so flag it
+  // for a dashboard check + unconditional re-apply.
+  report(
+    "MANUAL",
+    "0015 claim_pending_bulletin body + idx_bulletin_in_progress",
+    "body is not introspectable and the LIVE function is known to carry the sent_at drift bug — RE-APPLY 0015 unconditionally (create or replace, idempotent). Dashboard check: select pg_get_functiondef('public.claim_pending_bulletin'::regproc);",
+  );
+
   // ---- get_bulletin_subscribers manual edit ---------------------------------
   // PostgREST cannot expose function bodies; the SQL file's section 5/5 audits
   // it on every run. Point at the dashboard check here.

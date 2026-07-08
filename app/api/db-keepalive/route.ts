@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { logEvent } from "@/lib/log";
+import { secretMatches, bearerToken } from "@/lib/auth/secret";
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -16,9 +17,7 @@ export async function GET(req: NextRequest) {
   // Require the cron secret: Vercel auto-sends `Authorization: Bearer $CRON_SECRET` on
   // scheduled invocations when CRON_SECRET is set. The vercel-cron User-Agent is
   // client-spoofable, so it is not an authentication factor.
-  const cronSecret = process.env.CRON_SECRET;
-  const auth = req.headers.get("authorization") || "";
-  if (!cronSecret || auth !== `Bearer ${cronSecret}`)
+  if (!secretMatches(bearerToken(req.headers.get("authorization")), process.env.CRON_SECRET))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const started = Date.now();
@@ -77,10 +76,14 @@ export async function GET(req: NextRequest) {
           notified++;
         }
       }
+      // Offer both 'pending' (resume) and 'in_progress' (potentially wedged) rows;
+      // runArticleNotify's resolveClaim decides whether a run is stale enough to
+      // reclaim, so a fresh in_progress run is simply skipped. Without in_progress
+      // here, a wedged row would never be revisited and the reclaim path is dead.
       const { data: pend } = await svc
         .from("article_notification_log")
         .select("article_id")
-        .eq("status", "pending")
+        .in("status", ["pending", "in_progress"])
         .limit(10);
       for (const p of pend ?? []) {
         await runArticleNotify((p as { article_id: string }).article_id);

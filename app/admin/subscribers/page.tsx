@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import { fmtDate } from "@/lib/format";
+import { csvCell } from "@/lib/csv";
 
 interface Sub {
   id: string;
@@ -62,13 +63,6 @@ export default function AdminSubscribers() {
 
   const confirmed = subs.filter((s) => s.confirmed && !s.unsubscribed_at);
 
-  // Quote every field and neutralise spreadsheet formula injection (leading = + - @ tab),
-  // since email/job_title are visitor-supplied.
-  const csvCell = (v: unknown) => {
-    let s = String(v ?? "");
-    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
-    return `"${s.replace(/"/g, '""')}"`;
-  };
   const exportCsv = () => {
     const header = ["email", "job_title", "confirmed", "unsubscribed", "frequency", "created_at"].join(",");
     const rows = subs.map((s) =>

@@ -2,6 +2,7 @@
 // Token-addressed: only someone holding the emailed token can flip the flag.
 import { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { logEvent } from "@/lib/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,7 +36,8 @@ export async function GET(req: NextRequest) {
       return page("Already done", "This link was already used or has expired.", 200);
     }
     return page("Unsubscribed", "You won't get reply notifications for that comment anymore.", 200);
-  } catch {
+  } catch (e) {
+    logEvent("comments.unsubscribe.failed", { message: e instanceof Error ? e.message : String(e) });
     return page("Something went wrong", "Please try the link again in a moment.", 500);
   }
 }

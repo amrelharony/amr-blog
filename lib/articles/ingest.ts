@@ -4,9 +4,11 @@
 // arithmetic are unit-testable (vitest covers lib/** only) — same split as
 // lib/chat/rate-limit.ts. The route (app/api/articles/route.ts) owns I/O:
 // body read, service client, insert + 23505 retry, revalidation, after().
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { slugify } from "@/lib/format";
 import { CATEGORY_LABELS, categoryByLabel } from "@/lib/categories";
+// Constant-time key check now lives in lib/auth/secret (shared with the cron /
+// revalidation routes). Re-exported as validKey so callers and tests are unchanged.
+export { secretMatches as validKey } from "@/lib/auth/secret";
 
 export const MAX_TITLE = 200;
 export const MAX_BODY_BYTES = 1_000_000; // ~1 MB of JSON — generous for very long articles
@@ -34,19 +36,6 @@ export function presentedKey(headers: Headers): string | null {
   return headers.get("x-articles-api-key");
 }
 
-// Random per-boot stand-in hashed when the real key or the presented key is
-// absent, so every call does identical hash+compare work and response timing
-// can't reveal whether ARTICLES_API_KEY is configured.
-const DUMMY_KEY = randomBytes(32).toString("hex");
-
-/** Constant-time key check. Hash both sides so length never leaks and
- *  timingSafeEqual (which throws on length mismatch) always gets equal lengths. */
-export function validKey(presented: string | null, expected: string | undefined): boolean {
-  const a = createHash("sha256").update(presented ?? DUMMY_KEY).digest();
-  const b = createHash("sha256").update(expected || DUMMY_KEY).digest();
-  const eq = timingSafeEqual(a, b);
-  return eq && !!expected && presented !== null;
-}
 
 export function normTags(v: unknown): string[] {
   if (Array.isArray(v)) return v.map((t) => String(t).trim()).filter(Boolean);

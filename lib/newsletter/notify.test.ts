@@ -3,8 +3,11 @@ import {
   articleEmailHTML,
   replyEmailHTML,
   batchWindow,
-  shouldSend,
+  resolveClaim,
 } from "@/lib/newsletter/notify";
+
+const HOUR = 3_600_000;
+const NOW = Date.parse("2026-07-07T12:00:00Z");
 
 const article = {
   title: 'Banking "APIs" & <You>',
@@ -79,15 +82,33 @@ describe("batchWindow (resume arithmetic — mirrors runBulletinSend)", () => {
   });
 });
 
-describe("shouldSend (claim decision)", () => {
-  it("proceeds with no prior row or a resumable pending row", () => {
-    expect(shouldSend(null)).toBe(true);
-    expect(shouldSend(undefined)).toBe(true);
-    expect(shouldSend({ status: "pending" })).toBe(true);
+describe("resolveClaim (lost-race decision)", () => {
+  it("resumes a pending row; skips sent/missing/unexpected", () => {
+    expect(resolveClaim({ status: "pending" }, NOW)).toBe("resume");
+    expect(resolveClaim({ status: "sent" }, NOW)).toBe("skip");
+    expect(resolveClaim(null, NOW)).toBe("skip");
+    expect(resolveClaim(undefined, NOW)).toBe("skip");
+    expect(resolveClaim({ status: "weird" }, NOW)).toBe("skip");
   });
 
-  it("skips when another run owns it or it already went out", () => {
-    expect(shouldSend({ status: "in_progress" })).toBe(false);
-    expect(shouldSend({ status: "sent" })).toBe(false);
+  it("skips a fresh in_progress run (recent sent_at heartbeat)", () => {
+    const sent_at = new Date(NOW - 1 * HOUR).toISOString();
+    expect(resolveClaim({ status: "in_progress", sent_at }, NOW)).toBe("skip");
+  });
+
+  it("reclaims an in_progress run whose heartbeat is older than the 2h threshold", () => {
+    const sent_at = new Date(NOW - 3 * HOUR).toISOString();
+    expect(resolveClaim({ status: "in_progress", sent_at }, NOW)).toBe("reclaim");
+  });
+
+  it("falls back to created_at when sent_at is null (legacy wedge)", () => {
+    const fresh = new Date(NOW - 1 * HOUR).toISOString();
+    const old = new Date(NOW - 5 * HOUR).toISOString();
+    expect(resolveClaim({ status: "in_progress", sent_at: null, created_at: fresh }, NOW)).toBe("skip");
+    expect(resolveClaim({ status: "in_progress", sent_at: null, created_at: old }, NOW)).toBe("reclaim");
+  });
+
+  it("reclaims when no heartbeat is parseable at all", () => {
+    expect(resolveClaim({ status: "in_progress", sent_at: null, created_at: null }, NOW)).toBe("reclaim");
   });
 });

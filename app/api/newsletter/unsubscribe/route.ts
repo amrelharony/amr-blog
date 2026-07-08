@@ -1,5 +1,6 @@
 // Newsletter unsubscribe — ported from api/newsletter-unsubscribe.js.
 import { NextRequest } from "next/server";
+import { logEvent } from "@/lib/log";
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -57,7 +58,8 @@ export async function POST(req: NextRequest) {
     });
     if (!res.ok) throw new Error("rpc failed");
     return page("Unsubscribed", `<div class="icon">👋</div><div class="title">You've Been Unsubscribed</div><div class="sub">Sorry to see you go. You'll no longer receive the biweekly newsletter from Amr Elharony.</div><a class="btn" href="${SITE}">Visit Blog</a>`);
-  } catch {
+  } catch (e) {
+    logEvent("newsletter.unsubscribe.failed", { message: e instanceof Error ? e.message : String(e) });
     return page("Error", `<div class="icon">⚠️</div><div class="title">Something went wrong</div><div class="sub">Please try again later.</div><a class="btn" href="${SITE}">Go to Blog</a>`);
   }
 }

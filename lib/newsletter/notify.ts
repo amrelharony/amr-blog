@@ -7,10 +7,17 @@
 // through anon-readable paths, and the log table is RLS-locked with no
 // policies. Callers treat this as fail-open — any error just logs.
 import { createServiceClient } from "@/lib/supabase/service";
+import { logEvent } from "@/lib/log";
+import { withRetry } from "@/lib/retry";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://blog.amrelharony.com";
 const BATCH = 90; // proven Resend batch size (lib/newsletter/send.ts)
 const PG_PAGE = 1000;
+const RESEND_TIMEOUT_MS = 15_000; // mirrors lib/newsletter/send.ts — never let one hung send wedge the run
+// A run that dies mid-send leaves status='in_progress'. With no updated_at column
+// (0013), we treat `sent_at` as a claim/heartbeat timestamp for NON-'sent' rows so a
+// stale run can be reclaimed — mirrors claim_pending_bulletin's 2h reclaim in SQL.
+const STALE_CLAIM_MS = 2 * 3_600_000;
 
 interface NotifyArticle {
   id: string;
@@ -92,11 +99,32 @@ export function batchWindow(recipientCount: number, batchRemaining: number, batc
   return { offset, size, remainingAfter: Math.max(0, recipientCount - offset - size) };
 }
 
-/** Pure claim decision: should this run proceed given an existing log row? */
-export function shouldSend(row: { status: string } | null | undefined): boolean {
-  // No row: caller just claimed. 'pending': a prior run left batches to resume.
-  // 'in_progress' (someone else is mid-send) and 'sent' (done): skip.
-  return !row || row.status === "pending";
+export type ClaimDecision = "resume" | "reclaim" | "skip";
+
+/**
+ * Pure claim decision for the LOST-RACE branch (a row already exists):
+ *   - 'pending'     → resume (a prior run left batches to finish)
+ *   - 'sent'        → skip (done)
+ *   - 'in_progress' → the owner may be mid-send OR wedged; reclaim only if its
+ *                     heartbeat (`sent_at`, falling back to `created_at`) is
+ *                     older than staleMs, else skip so we don't stomp a live run.
+ *   - null/missing  → skip (only reached when a row is expected to exist).
+ * NOTE: a non-null `sent_at` here does NOT mean "sent" — status must be 'sent'
+ * for that. It doubles as the claim/heartbeat time for unfinished rows.
+ */
+export function resolveClaim(
+  row: { status: string; sent_at?: string | null; created_at?: string | null } | null | undefined,
+  nowMs: number,
+  staleMs = STALE_CLAIM_MS,
+): ClaimDecision {
+  if (!row) return "skip";
+  if (row.status === "pending") return "resume";
+  if (row.status !== "in_progress") return "skip"; // 'sent' or anything unexpected
+  const heartbeat = row.sent_at ?? row.created_at;
+  const heartbeatMs = heartbeat ? Date.parse(heartbeat) : NaN;
+  // No parseable heartbeat (legacy pre-deploy wedge) → treat as stale.
+  if (Number.isNaN(heartbeatMs)) return "reclaim";
+  return nowMs - heartbeatMs >= staleMs ? "reclaim" : "skip";
 }
 
 /** Reply-notification email (comment subscriptions). Exported for tests. */
@@ -171,7 +199,7 @@ export async function runReplyNotify(replyCommentId: string): Promise<void> {
     if (!subscription) return;
 
     // Claim this reply (send-once across concurrent triggers).
-    const { data: claimed } = await sb
+    const { data: claimed, error: claimErr } = await sb
       .from("comment_reply_notification_log")
       .upsert(
         { reply_comment_id: replyCommentId },
@@ -179,6 +207,7 @@ export async function runReplyNotify(replyCommentId: string): Promise<void> {
       )
       .select("reply_comment_id")
       .maybeSingle();
+    if (claimErr) throw claimErr; // a DB error must not look like "already sent"
     if (!claimed) return; // someone else already sent it
 
     const { data: article } = await sb
@@ -189,23 +218,31 @@ export async function runReplyNotify(replyCommentId: string): Promise<void> {
     if (!article) return;
 
     const unsubUrl = `${SITE}/api/comments/unsubscribe?token=${encodeURIComponent(subscription.token)}`;
-    await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: "Amr Elharony <noreply@updates.amrelharony.com>",
-        to: [subscription.email],
-        subject: `New reply on "${article.title}"`.slice(0, 160),
-        html: replyEmailHTML({
-          articleTitle: article.title,
-          articleSlug: article.slug,
-          parentExcerpt: parent.content || "",
-          replyAuthor: reply.author_name || "Anonymous",
-          replyExcerpt: reply.content || "",
-          unsubUrl,
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: "Amr Elharony <noreply@updates.amrelharony.com>",
+          to: [subscription.email],
+          subject: `New reply on "${article.title}"`.slice(0, 160),
+          html: replyEmailHTML({
+            articleTitle: article.title,
+            articleSlug: article.slug,
+            parentExcerpt: parent.content || "",
+            replyAuthor: reply.author_name || "Anonymous",
+            replyExcerpt: reply.content || "",
+            unsubUrl,
+          }),
         }),
-      }),
-    }).catch(() => {});
+        signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),
+      });
+      // The PK claim is already consumed, so a failure can't be retried — but it
+      // must at least be observable rather than vanishing into .catch(()=>{}).
+      if (!res.ok) logEvent("notify.reply.send_failed", { replyCommentId, status: res.status });
+    } catch (e) {
+      logEvent("notify.reply.send_failed", { replyCommentId, message: e instanceof Error ? e.message : String(e) });
+    }
   } catch (e) {
     console.error("[reply-notify] fail-open:", replyCommentId, e instanceof Error ? e.message : e);
   }
@@ -229,14 +266,19 @@ export async function runArticleNotify(articleId: string): Promise<void> {
     if (!article || !article.published) return;
 
     // Claim: first INSERT wins the article; losers get a conflict (no row).
-    const { data: claimed } = await sb
+    // `sent_at` is stamped as the claim heartbeat (see resolveClaim / STALE_CLAIM_MS).
+    const now = () => new Date().toISOString();
+    const { data: claimed, error: claimErr } = await sb
       .from("article_notification_log")
       .upsert(
-        { article_id: articleId, status: "in_progress" },
+        { article_id: articleId, status: "in_progress", sent_at: now() },
         { onConflict: "article_id", ignoreDuplicates: true },
       )
       .select("id,status")
       .maybeSingle();
+    // A DB error here is NOT "someone else claimed it" — surface it (fail-open log)
+    // instead of silently dropping into the resume branch on garbage state.
+    if (claimErr) throw claimErr;
 
     let logId: string;
     let resumeRemaining = 0;
@@ -244,22 +286,32 @@ export async function runArticleNotify(articleId: string): Promise<void> {
     if (claimed) {
       logId = claimed.id;
     } else {
-      // Someone claimed before us — only proceed if they left a resumable run.
-      const { data: row } = await sb
+      // Someone claimed before us — resume a pending run, or reclaim a wedged one.
+      const { data: row, error: rowErr } = await sb
         .from("article_notification_log")
-        .select("id,status,recipient_count,batch_remaining")
+        .select("id,status,recipient_count,batch_remaining,sent_at,created_at")
         .eq("article_id", articleId)
         .maybeSingle();
-      if (!row || !shouldSend(row)) return;
-      // Re-take the pending row (best-effort optimistic lock on status).
-      const { data: taken } = await sb
+      if (rowErr) throw rowErr;
+      const decision = resolveClaim(row, Date.now());
+      if (decision === "skip" || !row) return;
+
+      // Optimistic single-winner lock. For 'resume' the guard is status='pending';
+      // for 'reclaim' it's status='in_progress' AND a stale/absent heartbeat, and
+      // the winner bumps sent_at so a concurrent reclaimer's predicate stops matching.
+      let take = sb
         .from("article_notification_log")
-        .update({ status: "in_progress" })
-        .eq("id", row.id)
-        .eq("status", "pending")
-        .select("id")
-        .maybeSingle();
-      if (!taken) return;
+        .update({ status: "in_progress", sent_at: now() })
+        .eq("id", row.id);
+      if (decision === "resume") {
+        take = take.eq("status", "pending");
+      } else {
+        const cutoff = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
+        take = take.eq("status", "in_progress").or(`sent_at.is.null,sent_at.lt.${cutoff}`);
+      }
+      const { data: taken, error: takeErr } = await take.select("id").maybeSingle();
+      if (takeErr) throw takeErr;
+      if (!taken) return; // lost the race to a fresh run or another reclaimer
       logId = row.id;
       resumeRemaining = row.batch_remaining;
       recipientTotal = row.recipient_count;
@@ -283,10 +335,11 @@ export async function runArticleNotify(articleId: string): Promise<void> {
     }
 
     if (recipients.length === 0) {
-      await sb
+      const { error } = await sb
         .from("article_notification_log")
-        .update({ status: "sent", recipient_count: 0, batch_remaining: 0, sent_at: new Date().toISOString() })
+        .update({ status: "sent", recipient_count: 0, batch_remaining: 0, sent_at: now() })
         .eq("id", logId);
+      if (error) throw error;
       return;
     }
 
@@ -297,29 +350,48 @@ export async function runArticleNotify(articleId: string): Promise<void> {
     );
     const batch = recipients.slice(offset, offset + size);
 
+    let sent = 0;
+    let failed = 0;
     for (const r of batch) {
       const unsubUrl = `${SITE}/api/newsletter/unsubscribe?token=${encodeURIComponent(r.unsubscribe_token)}`;
-      await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from: "Amr Elharony <noreply@updates.amrelharony.com>",
-          to: [r.email],
-          subject: `New article: ${article.title}`.slice(0, 160),
-          html: articleEmailHTML(article, unsubUrl),
-        }),
-      }).catch(() => {});
+      try {
+        const res = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from: "Amr Elharony <noreply@updates.amrelharony.com>",
+            to: [r.email],
+            subject: `New article: ${article.title}`.slice(0, 160),
+            html: articleEmailHTML(article, unsubUrl),
+          }),
+          // An unbounded hung send is exactly what leaves a wedged 'in_progress'
+          // row for the reclaim path to recover — cap it, count it as unsent.
+          signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),
+        });
+        if (res.ok) sent++;
+        else failed++;
+      } catch {
+        failed++;
+      }
     }
+    logEvent("notify.batch", { articleId, offset, size, sent, failed, remaining: remainingAfter });
 
-    await sb
-      .from("article_notification_log")
-      .update({
-        recipient_count: recipientTotal,
-        batch_remaining: remainingAfter,
-        status: remainingAfter > 0 ? "pending" : "sent",
-        ...(remainingAfter > 0 ? {} : { sent_at: new Date().toISOString() }),
-      })
-      .eq("id", logId);
+    // Emails are already out; a lost write here wedges the row until the 2h
+    // reclaim re-sends the batch — retry a few times before letting it throw.
+    // `sent_at` is stamped on BOTH branches as the heartbeat (only status='sent'
+    // means done).
+    await withRetry(async () => {
+      const { error } = await sb
+        .from("article_notification_log")
+        .update({
+          recipient_count: recipientTotal,
+          batch_remaining: remainingAfter,
+          status: remainingAfter > 0 ? "pending" : "sent",
+          sent_at: now(),
+        })
+        .eq("id", logId);
+      if (error) throw error;
+    });
   } catch (e) {
     console.error("[notify] fail-open:", articleId, e instanceof Error ? e.message : e);
   }

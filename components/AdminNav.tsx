@@ -31,7 +31,12 @@ export default function AdminNav() {
       {TABS.map((t) => {
         const active = t.href === "/admin" ? pathname === "/admin" : pathname.startsWith(t.href);
         return (
-          <Link key={t.href} href={t.href} className={"adm-nav-link" + (active ? " active" : "")}>
+          <Link
+            key={t.href}
+            href={t.href}
+            className={"adm-nav-link" + (active ? " active" : "")}
+            aria-current={active ? "page" : undefined}
+          >
             {t.label}
           </Link>
         );

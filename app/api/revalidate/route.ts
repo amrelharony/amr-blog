@@ -4,15 +4,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { isAdminUser } from "@/lib/auth/require-admin";
+import { secretMatches } from "@/lib/auth/secret";
+import { logEvent } from "@/lib/log";
 
 async function authorized(req: NextRequest): Promise<boolean> {
-  const secret = req.headers.get("x-revalidate-secret");
-  if (secret && process.env.REVALIDATE_SECRET && secret === process.env.REVALIDATE_SECRET) return true;
+  // Constant-time compare (fails closed when REVALIDATE_SECRET is unset).
+  if (secretMatches(req.headers.get("x-revalidate-secret"), process.env.REVALIDATE_SECRET)) return true;
   return isAdminUser();
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await authorized(req))) return NextResponse.json({ ok: false }, { status: 401 });
+  if (!(await authorized(req))) {
+    logEvent("revalidate.denied", {});
+    return NextResponse.json({ ok: false }, { status: 401 });
+  }
   const body = await req.json().catch(() => ({}));
   const slug: string | undefined = body?.slug;
   revalidatePath("/");
@@ -20,5 +25,6 @@ export async function POST(req: NextRequest) {
   revalidatePath("/sitemap.xml");
   revalidatePath("/feed.xml");
   if (slug) revalidatePath(`/p/${slug}`);
+  logEvent("revalidate.ok", { slug: slug ?? null });
   return NextResponse.json({ ok: true });
 }
