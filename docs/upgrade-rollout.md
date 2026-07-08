@@ -29,10 +29,12 @@ It issues only GETs / `stable` RPC probes (never mutates) and prints a
 PASS/FAIL/SKIP/MANUAL line per migration, plus embed-function reachability,
 backfill counts, and the subscriber frequency split. It detects each migration
 by a schema marker; it CANNOT read function bodies, so 0015's
-`claim_pending_bulletin` and `get_bulletin_subscribers` show `MANUAL`. As of the
-last probe (2026-07), **0011–0014 are live, the embed function is reachable, and
-embeddings + TL;DRs are 100% backfilled** on production; the remaining work is
-0015's function body.
+`claim_pending_bulletin` and `get_bulletin_subscribers` show `MANUAL`. As of
+2026-07-08, **0011–0015 are all live** — 0011–0014 + embed function + backfills
+were confirmed via the probe, and 0015's `claim_pending_bulletin` sent_at fix was
+applied to prod on 2026-07-08 (the repo file had also been missing that stamp —
+now corrected). Rollout is complete; re-run the probe after any future schema
+change.
 
 ### 1. Apply migrations in the Supabase dashboard (SQL editor)
 
@@ -48,9 +50,11 @@ Run in numeric order; each is idempotent (`if not exists` / `create or replace`)
 5. `db/migrations/0015_bulletin_claim_and_grants.sql` — `claim_pending_bulletin`
    (stamps `sent_at` on claim), the `idx_bulletin_in_progress` concurrency
    guard, and the anon/authenticated EXECUTE revokes on the bulletin RPCs.
-   - ⚠ The LIVE `claim_pending_bulletin` is known to carry the sent_at drift bug
-     until this is re-applied. The probe can't see function bodies, so **re-apply
-     0015 unconditionally** — it is `create or replace` + idempotent grants.
+   - ✅ Applied to prod 2026-07-08: the corrected `claim_pending_bulletin` (with
+     `sent_at = now()` on claim) is live; EXECUTE remains `service_role`-only.
+     The repo file previously shipped WITHOUT the sent_at stamp — that one-line
+     bug is now fixed in-file too. If re-applying to a fresh environment, this
+     file is `create or replace` + idempotent grants, safe to run whole.
 
 ### 2. Deploy the embeddings Edge Function (Phase 4)
 
