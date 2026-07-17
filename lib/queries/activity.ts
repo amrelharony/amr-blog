@@ -30,6 +30,16 @@ function first(v: string | string[] | undefined): string {
   return Array.isArray(v) ? (v[0] ?? "") : (v ?? "");
 }
 
+/** Regex-shaped AND a real calendar date — the regex alone admits 2026-13-01 / 2026-02-31,
+ *  which then blow up nextUtcDay (new Date(NaN).toISOString() → RangeError) or reach
+ *  PostgREST as an invalid timestamp. The ISO round-trip rejects both NaN and month/day
+ *  rollover. */
+function isValidDay(s: string): boolean {
+  if (!DAY_RE.test(s)) return false;
+  const t = Date.parse(`${s}T00:00:00Z`);
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === s;
+}
+
 /** Sanitize searchParams: malformed dates are dropped, page clamps to ≥ 1. */
 export function parseActivityFilters(
   sp: Record<string, string | string[] | undefined>,
@@ -39,8 +49,8 @@ export function parseActivityFilters(
   return {
     action: first(sp.action).slice(0, 64),
     entity: first(sp.entity).slice(0, 64),
-    from: DAY_RE.test(from) ? from : "",
-    to: DAY_RE.test(to) ? to : "",
+    from: isValidDay(from) ? from : "",
+    to: isValidDay(to) ? to : "",
     page: Math.max(1, Math.floor(Number(first(sp.page))) || 1),
   };
 }

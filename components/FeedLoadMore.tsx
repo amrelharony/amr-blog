@@ -43,6 +43,10 @@ export default function FeedLoadMore({
   // observer always calls the current closure).
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<() => void>(() => {});
+  // Synchronous in-flight guard: the `loading` state is async, so the sentinel observer
+  // and a button click firing in the same tick both pass the state check and each advance
+  // the offset — skipping a whole page. A ref blocks the second call immediately.
+  const loadingRef = useRef(false);
 
   useEffect(() => {
     setGridHost(document.querySelector<HTMLElement>("#lbGrid .lb-card-grid"));
@@ -60,7 +64,8 @@ export default function FeedLoadMore({
   }, [extra.length]);
 
   const loadMore = async () => {
-    if (loading || !hasMore || searching) return;
+    if (loadingRef.current || !hasMore || searching) return;
+    loadingRef.current = true;
     setLoading(true);
     try {
       const r = await fetch(
@@ -80,6 +85,7 @@ export default function FeedLoadMore({
     } catch (e) {
       console.error("[FeedLoadMore]", e);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   };

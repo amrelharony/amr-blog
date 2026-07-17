@@ -114,14 +114,24 @@ export async function runBulletinSend(): Promise<{ status: number; result: Bulle
   if (!Array.isArray(subscribers) || subscribers.length === 0)
     return { status: 200, result: { ok: true, skipped: true, reason: "No confirmed subscribers" } };
 
+  // recipient_count is frozen when the run is created, and claim_pending_bulletin derives
+  // the resume offset from it (recipient_count - batch_remaining). The subscriber list is
+  // re-fetched every batch and drifts: new confirmations append at the tail (ORDER BY
+  // created_at asc) and unsubscribes shrink it. `remaining` must therefore be anchored to
+  // that same frozen count so the stored batch_remaining advances the offset by exactly
+  // this batch's length. Deriving it from the live length instead lets every new
+  // confirmation pull the next offset backwards and re-send the boundary subscribers.
+  const total = pending ? pending.recipient_count : subscribers.length;
   let offset = 0;
   let logId: string | null = null;
   if (pending) {
-    offset = pending.recipient_count - pending.batch_remaining;
+    offset = Math.max(0, pending.recipient_count - pending.batch_remaining);
     logId = pending.id;
   }
   const batch = subscribers.slice(offset, offset + BATCH);
-  const remaining = subscribers.length - offset - batch.length;
+  // When the live list is exhausted past this batch (the tail unsubscribed), finish —
+  // otherwise a shrunk list would leave a 'pending' row that reclaims empty batches forever.
+  const remaining = subscribers.length - offset - batch.length <= 0 ? 0 : Math.max(0, total - offset - batch.length);
 
   // Claim the in-progress slot BEFORE sending anything: the unique partial index
   // idx_bulletin_in_progress rejects a concurrent invocation (e.g. the Vercel cron

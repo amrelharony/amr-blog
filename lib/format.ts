@@ -46,6 +46,8 @@ export function slugify(str: string | null | undefined): string {
     .trim()
     .replace(/[^\w\s-]/g, "")
     .replace(/[\s_]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
+    .slice(0, 80)
+    // Trim edge dashes AFTER the length cap so a cut that lands on a '-' doesn't leave a
+    // trailing dash (e.g. an ~80-char title).
+    .replace(/^-+|-+$/g, "");
 }

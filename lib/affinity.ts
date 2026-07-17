@@ -32,7 +32,9 @@ export function buildAffinity(
   for (const entry of Object.values(history || {})) {
     const tags = entry?.tags;
     if (!tags || tags.length === 0) continue;
-    const engagement = entry.completed ? 1 : Math.max((entry.progress || 0) / 100, VISIT_FLOOR);
+    // Clamp progress to [0,100] before scaling: a corrupt tracker value (>100) would
+    // otherwise make one glitched partial read outweigh a genuine completed read (=1).
+    const engagement = entry.completed ? 1 : Math.max(Math.min(entry.progress || 0, 100) / 100, VISIT_FLOOR);
     const t = entry.last_read_at ? new Date(entry.last_read_at).getTime() : NaN;
     const ageDays = Number.isFinite(t) ? Math.max(0, (now - t) / 86_400_000) : 0;
     const decay = Math.pow(0.5, ageDays / HALF_LIFE_DAYS);

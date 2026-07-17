@@ -22,7 +22,6 @@ export function readingTime(text: string | null | undefined): string {
 }
 
 function renderMd(s: string): string {
-  s = s.replace(/```([\s\S]*?)```/g, (_m, code: string) => "<pre>" + code.trim() + "</pre>");
   s = s.replace(
     /\|\|\|([\s\S]*?)\|\|\|/g,
     "<div class=\"blog-spoiler\" onclick=\"this.classList.toggle('revealed')\"><div class=\"blog-spoiler-body\">$1</div></div>",
@@ -36,6 +35,15 @@ function renderMd(s: string): string {
 
 export function fmtContent(raw: string): string {
   let s = esc(raw);
+  // Extract fenced code blocks to placeholders BEFORE any inline/link/hashtag pass, so
+  // their contents (which may hold **, `, ~~, http://, #foo) aren't reinterpreted as markup.
+  // The <!--CBn--> sentinel is collision-proof: esc() has turned every user '<' into &lt;,
+  // so a raw '<' can only be one we inserted here, and no transform regex below matches it.
+  const codeBlocks: string[] = [];
+  s = s.replace(/```([\s\S]*?)```/g, (_m, code: string) => {
+    codeBlocks.push("<pre>" + code.trim() + "</pre>");
+    return "<!--CB" + (codeBlocks.length - 1) + "-->";
+  });
   s = renderMd(s);
   // Don't turn a URL fragment (e.g. /wiki/Foo#History) into a hashtag: only match a '#'
   // that isn't preceded by URL-ish characters, so the bare-URL autolink below still sees
@@ -49,5 +57,7 @@ export function fmtContent(raw: string): string {
     /(?<!["=])(https?:\/\/[^\s<]+)/g,
     '<a href="$1" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">$1</a>',
   );
+  // Restore the extracted code blocks, now that no further pass will touch them.
+  s = s.replace(/<!--CB(\d+)-->/g, (_m, i: string) => codeBlocks[Number(i)] ?? "");
   return s;
 }

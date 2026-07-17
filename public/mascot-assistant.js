@@ -2730,7 +2730,9 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
 
   function renderText(text) {
     if (!text) return '';
-    var escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // Escape " as well as & < > — the link rule below drops the URL into an href="…"
+    // attribute, so an unescaped quote in the URL would break out of it (arbitrary attrs).
+    var escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
     // Code blocks: ```lang\ncode\n``` → <pre><code>
     escaped = escaped.replace(/```(\w*)\n?([\s\S]*?)```/g, function(_, lang, code) {
@@ -2746,8 +2748,14 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
     // Italic: *text* → <em>
     escaped = escaped.replace(/(?<!\*)\*([^*\n]+?)\*(?!\*)/g, '<em>$1</em>');
 
-    // Links: [text](url) → <a>
-    escaped = escaped.replace(/\[([^\]]+?)\]\(([^)]+?)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    // Links: [text](url) → <a>. Only allow safe schemes — a bare [x](javascript:…) would
+    // otherwise render a clickable script URL. (The URL can't contain a raw " here — the
+    // top-of-function escape turned any into &quot; — so attribute breakout is already closed.)
+    escaped = escaped.replace(/\[([^\]]+?)\]\(([^)]+?)\)/g, function(_, label, url) {
+      return /^(https?:\/\/|mailto:|\/)/i.test(url.trim())
+        ? '<a href="' + url + '" target="_blank" rel="noopener">' + label + '</a>'
+        : label;
+    });
 
     // Unordered lists: lines starting with - or *
     escaped = escaped.replace(/(?:^|\n)((?:[-*] .+\n?)+)/g, function(_, block) {

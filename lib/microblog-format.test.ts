@@ -83,4 +83,21 @@ describe("fmtContent", () => {
     expect(out).toContain('<a href="https://example.com"');
     expect(out).toContain('data-tag="agile"');
   });
+
+  it("does not reinterpret markdown/URLs/hashtags inside a fenced code block", () => {
+    const out = fmtContent("```\n**not bold** `x` ~~keep~~ #tag https://example.com\n```");
+    expect(out).toBe("<pre>**not bold** `x` ~~keep~~ #tag https://example.com</pre>");
+    expect(out).not.toContain("<strong>");
+    expect(out).not.toContain("hashtag");
+    expect(out).not.toContain("<a ");
+    // No leftover sentinel in the output.
+    expect(out).not.toMatch(/<!--CB/);
+  });
+
+  it("restores multiple fenced blocks and still formats text around them", () => {
+    const out = fmtContent("```\n**a**\n```\nreal **bold**\n```\n**b**\n```");
+    expect(out).toContain("<pre>**a**</pre>");
+    expect(out).toContain("<pre>**b**</pre>");
+    expect(out).toContain("real <strong>bold</strong>");
+  });
 });

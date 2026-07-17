@@ -154,7 +154,10 @@ as $$
          sum(v.views)::bigint as recent_views
   from public.article_view_daily v
   join public.longform_articles a on a.id = v.article_id and a.published = true
-  where v.day >= (now() at time zone 'utc')::date - least(greatest(p_days, 1), 60)
+  -- Window incorporates the 0016 off-by-one fix: subtract (N-1) so the range is exactly
+  -- p_days days. Kept in sync here because this file is advertised as safe to re-run, and
+  -- re-running the pre-0016 body would silently revert the fix.
+  where v.day >= (now() at time zone 'utc')::date - (least(greatest(p_days, 1), 60) - 1)
   group by a.id
   order by recent_views desc, a.views desc
   limit least(greatest(p_count, 1), 12);
