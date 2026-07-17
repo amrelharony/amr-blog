@@ -130,6 +130,11 @@ export default function MascotChat() {
   const finalTranscriptRef = useRef("");
   const sendRef = useRef<(raw: string) => void>(() => {});
   const openRef = useRef(false);
+  // Aborts an in-flight /api/chat stream, and a generation counter bumped by
+  // newChat() so a stream that's still finishing can't resurrect the cleared
+  // conversation into histRef/localStorage/suggestions.
+  const abortRef = useRef<AbortController | null>(null);
+  const chatGenRef = useRef(0);
 
   // Open hooks for the mascot.
   useEffect(() => {
@@ -282,6 +287,11 @@ export default function MascotChat() {
     setMsgs((m) => [...m, { role: "user", text: q }, { role: "assistant", text: "" }]);
     setStreaming(true);
     streamingRef.current = true;
+    // Snapshot the conversation generation; if newChat() runs mid-stream it bumps
+    // this and aborts the fetch, so the terminal writes below are skipped.
+    const gen = chatGenRef.current;
+    const ac = new AbortController();
+    abortRef.current = ac;
     try {
       const w = window as Window & { _ensureChatAuth?: () => Promise<unknown> };
       if (w._ensureChatAuth) await w._ensureChatAuth();
@@ -292,6 +302,7 @@ export default function MascotChat() {
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: q.slice(0, 500), history: histRef.current.slice(-10), pageContext: articlePageContext() }),
+        signal: ac.signal,
       });
 
       const dMax = parseInt(res.headers.get("x-ratelimit-daily-max") || "25", 10);
@@ -333,10 +344,14 @@ export default function MascotChat() {
         }
       }
 
+      // Bail if the conversation was reset (New chat) while the stream finished —
+      // otherwise we'd re-add the discarded exchange to history and suggestions.
+      if (gen !== chatGenRef.current) return;
       if (!full.trim()) {
         updateLast({ text: "I don't have an answer for that yet — try one of the topics below!", error: true });
       } else {
         const [html, sources] = await Promise.all([renderMarkdown(full), findSources(q)]);
+        if (gen !== chatGenRef.current) return;
         updateLast({ text: full, html, sources });
         histRef.current.push({ role: "user", content: q }, { role: "assistant", content: full });
         histRef.current = histRef.current.slice(-20);
@@ -345,9 +360,12 @@ export default function MascotChat() {
         } catch {}
       }
       setSuggestions(followUps(cats));
-    } catch {
+    } catch (e) {
+      // An abort (New chat / navigation) is expected — don't flash an error.
+      if ((e as Error)?.name === "AbortError" || gen !== chatGenRef.current) return;
       updateLast({ text: "Something went wrong. Please try again.", error: true });
     } finally {
+      if (abortRef.current === ac) abortRef.current = null;
       setStreaming(false);
       streamingRef.current = false;
     }
@@ -415,6 +433,13 @@ export default function MascotChat() {
   }
 
   const newChat = () => {
+    // Invalidate + abort any in-flight stream so it can't write back into the
+    // freshly-cleared history (see the generation guard in send()).
+    chatGenRef.current++;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    streamingRef.current = false;
+    setStreaming(false);
     setMsgs([]);
     histRef.current = [];
     try {

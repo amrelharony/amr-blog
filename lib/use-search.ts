@@ -56,6 +56,9 @@ export function useSearch(
       } catch (e) {
         if (ac.signal.aborted) return;
         setLoading(false);
+        // Drop the previous query's results so a failed fetch can't leave stale
+        // hits on screen (with highlights recomputed for the new, un-searched terms).
+        setRes(null);
         if (onError) onError(e);
         else console.error("[useSearch]", e);
       }

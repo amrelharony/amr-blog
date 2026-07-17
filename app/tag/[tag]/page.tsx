@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { getArticlesByTag, getTagCount } from "@/lib/queries/articles";
 import { CATEGORY_PAGE_SIZE } from "@/lib/constants";
 import ArticleCardV2 from "@/components/ArticleCardV2";
@@ -25,6 +26,9 @@ export default async function TagPage({ params }: Params) {
     getArticlesByTag(tag, CATEGORY_PAGE_SIZE, 0),
     getTagCount(tag),
   ]);
+  // 404 an empty/nonexistent tag rather than serving an indexable soft-404, matching
+  // /category, /series, and /archive (and /feed/tag, which already 404s).
+  if (total === 0) notFound();
   const hasMore = total > articles.length;
 
   return (

@@ -22,6 +22,12 @@ describe("sanitize", () => {
     expect(sanitize(null)).toBe("");
     expect(sanitize(["<b>x</b>"])).toBe("");
   });
+  it("stays fast on a long run of '<' (ReDoS guard)", () => {
+    const evil = "<".repeat(400_000);
+    const t = Date.now();
+    sanitize(evil);
+    expect(Date.now() - t).toBeLessThan(500); // was ~80s with an unbounded /<[^>]*>/
+  });
 });
 
 describe("validateHistory", () => {

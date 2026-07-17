@@ -59,7 +59,7 @@ export default function ThoughtsFeed({ initial }: { initial: Thought[] }) {
   const loadMore = async () => {
     if (loading || !hasMore) return;
     setLoading(true);
-    const { data } = await sb
+    const { data, error } = await sb
       .from("microblog")
       .select("*")
       // Match the RLS predicate at the app layer (consistent with getThoughts).
@@ -68,6 +68,12 @@ export default function ThoughtsFeed({ initial }: { initial: Thought[] }) {
       .order("pinned", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1);
+    // A transient error yields data=null; treat it as "retry later", not "end of
+    // feed" — otherwise one network blip permanently hides the Load More control.
+    if (error) {
+      setLoading(false);
+      return;
+    }
     const rows = (data || []) as Thought[];
     // De-dupe by id: range/offset pagination over a newest-first, mutable list can
     // re-surface a row if a post was inserted/removed between page fetches.
@@ -253,6 +259,7 @@ function PostCard({
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<{ id: string; author: string; content: string; created_at: string; author_id?: string | null }[]>([]);
   const [cInput, setCInput] = useState("");
+  const [cBusy, setCBusy] = useState(false);
   const sb = getBrowserClient();
 
   useEffect(() => {
@@ -285,20 +292,28 @@ function PostCard({
   };
 
   const sendComment = async () => {
-    if (!cInput.trim()) return;
-    const author = localStorage.getItem("_blog_commenter") || "Visitor";
-    localStorage.setItem("_blog_commenter", author);
-    await ensureAnonSession();
-    // Insert via the rate-limited/validated RPC, not a direct table write, so the
-    // per-author limit, length cap, and reserved-name block can't be bypassed.
-    const { error } = await sb.rpc("post_microblog_comment", {
-      p_post_id: post.id,
-      p_author: author,
-      p_content: cInput.trim(),
-    });
-    if (!error) {
-      setCInput("");
-      await loadComments();
+    // Guard against double-submit: the Enter key and the Send button both call this,
+    // and the input isn't cleared until the RPC resolves — without this a fast
+    // double-tap posts the same comment twice (the server limit doesn't dedupe).
+    if (cBusy || !cInput.trim()) return;
+    setCBusy(true);
+    try {
+      const author = localStorage.getItem("_blog_commenter") || "Visitor";
+      localStorage.setItem("_blog_commenter", author);
+      await ensureAnonSession();
+      // Insert via the rate-limited/validated RPC, not a direct table write, so the
+      // per-author limit, length cap, and reserved-name block can't be bypassed.
+      const { error } = await sb.rpc("post_microblog_comment", {
+        p_post_id: post.id,
+        p_author: author,
+        p_content: cInput.trim(),
+      });
+      if (!error) {
+        setCInput("");
+        await loadComments();
+      }
+    } finally {
+      setCBusy(false);
     }
   };
 
@@ -389,7 +404,10 @@ function PostCard({
 
       <div className="blog-post-meta">
         <span>
-          {relTime(post.created_at)}
+          {/* Relative time is computed from wall-clock now: the ISR-snapshot value and
+              the client's hydration value differ for recent posts. Suppress the
+              expected text mismatch so React keeps the (fresher) client value. */}
+          <span suppressHydrationWarning>{relTime(post.created_at)}</span>
           {post.content ? <span className="blog-reading-time">· {readingTime(post.content)}</span> : null}
           {post.views ? <span className="blog-views">👁 {post.views}</span> : null}
         </span>
@@ -455,7 +473,7 @@ function PostCard({
                 if (e.key === "Enter") sendComment();
               }}
             />
-            <button className="blog-comment-send" onClick={sendComment}>
+            <button className="blog-comment-send" onClick={sendComment} disabled={cBusy}>
               Send
             </button>
           </div>

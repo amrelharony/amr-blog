@@ -369,9 +369,11 @@ export default function WritePage() {
     }
     setBusy(true);
     setMsg(null);
-    // Lowercase to match the normalization slugTakenServer/isSlugTaken compare
-    // against and that slugify() already applies — avoids case-variant duplicates.
-    const slug = (form.slug || slugify(form.title)).trim().toLowerCase();
+    // slugify() the manual slug too (not just the title-derived one): it lowercases,
+    // trims, and strips URL-unsafe chars so a hand-typed slug with a space or "&"
+    // can't produce an invalid sitemap <loc>/canonical. Matches the ingest API
+    // (lib/articles/ingest.ts) and the slugTakenServer/isSlugTaken normalization.
+    const slug = slugify(form.slug || form.title);
     const row: Record<string, unknown> = {
       title: form.title.trim(),
       slug,

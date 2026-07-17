@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Floating article toolbar — ported from initArticleToolbar/initReadingSettings in
 // Js/blog-article.js: a bottom-right pill showing reading-time-left + a gear that
@@ -59,11 +59,24 @@ export default function ArticleToolbar({ minutes }: { minutes: number }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>({});
+  // Whether we've written a per-article theme override onto <html>. This client
+  // component unmounts on navigation away from the article; if we applied an
+  // override we must undo it, or the whole site stays stuck on the reader's
+  // article theme (e.g. "Light" at night) on every subsequent page.
+  const overrodeTheme = useRef(false);
 
   useEffect(() => {
     const p = getPrefs();
     setPrefs(p);
     applyPrefs(p);
+    if (p.theme) overrodeTheme.current = true;
+    return () => {
+      if (!overrodeTheme.current) return;
+      // Restore the global theme: drop the sepia override and let ThemeManager
+      // re-assert light-mode for the current mode (same ritual as applyMode).
+      document.documentElement.classList.remove("lb-sepia");
+      window.dispatchEvent(new Event("thememodechange"));
+    };
   }, []);
 
   useEffect(() => {
@@ -106,6 +119,7 @@ export default function ArticleToolbar({ minutes }: { minutes: number }) {
     } catch {}
     setPrefs(np);
     applyPrefs(np);
+    if (np.theme) overrodeTheme.current = true;
   };
 
   return (

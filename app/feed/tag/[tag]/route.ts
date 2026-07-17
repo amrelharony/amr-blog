@@ -14,13 +14,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ tag: st
   if (!clean) return new Response("Not found", { status: 404 });
 
   const sb = createPublicClient();
-  const { data } = await sb
+  const { data, error } = await sb
     .from("longform_articles")
     .select("title,slug,excerpt,created_at,tags")
     .eq("published", true)
     .contains("tags", [clean])
     .order("created_at", { ascending: false })
     .limit(50);
+  // Throw on a DB error so a transient failure doesn't get cached as a 404 (which
+  // some feed readers treat as "feed gone" and auto-unsubscribe from).
+  if (error) throw error;
   const articles = (data ?? []) as {
     title: string;
     slug: string;
