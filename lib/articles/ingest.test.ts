@@ -127,6 +127,11 @@ describe("isInternalHost", () => {
     "172.31.255.255",
     "100.64.0.1", // CGNAT low edge
     "100.127.255.255", // CGNAT high edge
+    "2130706433", // bare decimal for 127.0.0.1
+    "0x7f000001", // bare hex for 127.0.0.1
+    "::ffff:7f00:1", // hex-form IPv4-mapped loopback
+    "017.0.0.1", // octal-octet loopback (inet_aton parses 017 as 15)
+    "010.0.0.1", // zero-padded octet ambiguity
   ];
   const external = [
     "example.com",

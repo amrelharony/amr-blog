@@ -200,24 +200,47 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch {
-        // upstream stream error — close gracefully
+        // upstream stream error, or the client disconnected and cancel() aborted the
+        // fetch — either way fall through to record whatever usage accrued.
       } finally {
         if (idleTimer) clearTimeout(idleTimer);
         // Always terminate the client stream — on idle-timeout or upstream error
         // the upstream "[DONE]" never arrives, which would otherwise hang the client.
+        // Both enqueue() and close() throw once the consumer has cancelled the stream
+        // (client disconnect), so guard them: an unguarded throw here would skip the
+        // usage recording below and let aborted chats escape the session/IP counters.
         if (!doneSent) {
           try {
             ctrl.enqueue(encoder.encode("data: [DONE]\n\n"));
           } catch {}
         }
-        ctrl.close();
         try {
-          await supabase.rpc("record_chat_usage", {
+          ctrl.close();
+        } catch {}
+        // Record even on abort — estTokens tracks partial output, so a client that
+        // disconnects mid-stream still gets metered. A swallowed error here is exactly
+        // the p_user_id-class regression this repo hit before, so surface it — but keep
+        // the try/catch so an unexpected reject can't escape this finally as an unhandled
+        // rejection out of the stream's start().
+        try {
+          const { error: usageErr } = await supabase.rpc("record_chat_usage", {
             p_tokens: tokensTotal || estTokens,
             p_model: OPENCLAW_MODEL,
           });
-        } catch {}
+          if (usageErr) logEvent("chat.record_usage_failed", { message: usageErr.message });
+        } catch (e) {
+          logEvent("chat.record_usage_failed", { message: e instanceof Error ? e.message : String(e) });
+        }
       }
+    },
+    // The client disconnecting cancels this stream. Without aborting the upstream
+    // fetch, OpenClaw keeps generating (up to MAX_TOKENS) for a dead connection and
+    // the read loop above spins on enqueue-throws. Aborting rejects reader.read(),
+    // so the loop unwinds through finally and usage is recorded exactly once.
+    cancel() {
+      try {
+        controller.abort();
+      } catch {}
     },
   });
 

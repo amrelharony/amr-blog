@@ -82,6 +82,10 @@ export async function GET(req: NextRequest) {
       "Content-Type": ct,
       "Cache-Control": "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400",
       "Access-Control-Allow-Origin": allowOrigin,
+      // ACAO varies by request Origin, so the shared CDN entry must key on it — without
+      // Vary, the first origin to populate the cache pins its ACAO for the others and
+      // cross-origin image loads fail intermittently.
+      Vary: "Origin",
       "X-Content-Type-Options": "nosniff",
     },
   });

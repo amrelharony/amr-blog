@@ -38,6 +38,19 @@ function lsSet(k: string, v: unknown) {
 
 const viewed = new Set<string>();
 
+// relTime() reads Date.now(), which differs between the ISR snapshot and the client view,
+// so rendering it directly produces a hydration mismatch on essentially every /thoughts
+// visit. Render a deterministic UTC date on the server + first client render (identical on
+// both), then swap to the live relative label after mount.
+function RelTime({ iso }: { iso: string }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) {
+    return <>{new Date(iso).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" })}</>;
+  }
+  return <>{relTime(iso)}</>;
+}
+
 export default function ThoughtsFeed({ initial }: { initial: Thought[] }) {
   const sb = getBrowserClient();
   const [posts, setPosts] = useState<Thought[]>(initial);
@@ -253,6 +266,7 @@ function PostCard({
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<{ id: string; author: string; content: string; created_at: string; author_id?: string | null }[]>([]);
   const [cInput, setCInput] = useState("");
+  const [cSending, setCSending] = useState(false);
   const sb = getBrowserClient();
 
   useEffect(() => {
@@ -285,20 +299,28 @@ function PostCard({
   };
 
   const sendComment = async () => {
-    if (!cInput.trim()) return;
-    const author = localStorage.getItem("_blog_commenter") || "Visitor";
-    localStorage.setItem("_blog_commenter", author);
-    await ensureAnonSession();
-    // Insert via the rate-limited/validated RPC, not a direct table write, so the
-    // per-author limit, length cap, and reserved-name block can't be bypassed.
-    const { error } = await sb.rpc("post_microblog_comment", {
-      p_post_id: post.id,
-      p_author: author,
-      p_content: cInput.trim(),
-    });
-    if (!error) {
-      setCInput("");
-      await loadComments();
+    // Guard against double-submit: Enter key-repeat (hold Enter) and Enter+click both
+    // fire this, and the RPC only dedupes by rate limit — without this the same comment
+    // posts 2–5 times.
+    if (cSending || !cInput.trim()) return;
+    setCSending(true);
+    try {
+      const author = localStorage.getItem("_blog_commenter") || "Visitor";
+      localStorage.setItem("_blog_commenter", author);
+      await ensureAnonSession();
+      // Insert via the rate-limited/validated RPC, not a direct table write, so the
+      // per-author limit, length cap, and reserved-name block can't be bypassed.
+      const { error } = await sb.rpc("post_microblog_comment", {
+        p_post_id: post.id,
+        p_author: author,
+        p_content: cInput.trim(),
+      });
+      if (!error) {
+        setCInput("");
+        await loadComments();
+      }
+    } finally {
+      setCSending(false);
     }
   };
 
@@ -389,7 +411,7 @@ function PostCard({
 
       <div className="blog-post-meta">
         <span>
-          {relTime(post.created_at)}
+          <RelTime iso={post.created_at} />
           {post.content ? <span className="blog-reading-time">· {readingTime(post.content)}</span> : null}
           {post.views ? <span className="blog-views">👁 {post.views}</span> : null}
         </span>
@@ -435,7 +457,7 @@ function PostCard({
                     {c.author_id === "82dd079f-de7b-477b-84eb-6d34d9eded05" && (
                       <span className="blog-comment-owner" title="Verified — Amr"> ✓</span>
                     )}
-                    <span className="blog-comment-time">{relTime(c.created_at)}</span>
+                    <span className="blog-comment-time"><RelTime iso={c.created_at} /></span>
                   </span>
                   <div style={{ whiteSpace: "pre-wrap" }}>{c.content}</div>
                 </div>
@@ -455,7 +477,7 @@ function PostCard({
                 if (e.key === "Enter") sendComment();
               }}
             />
-            <button className="blog-comment-send" onClick={sendComment}>
+            <button className="blog-comment-send" onClick={sendComment} disabled={cSending}>
               Send
             </button>
           </div>

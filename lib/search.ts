@@ -134,8 +134,15 @@ export function buildSnippet(content: string, q: string, len = 160): string {
     const i = lower.indexOf(term);
     if (i !== -1 && (hit === -1 || i < hit)) hit = i;
   }
-  const start = hit === -1 ? 0 : Math.max(0, hit - Math.floor(len / 4));
-  const end = Math.min(text.length, start + len);
+  let start = hit === -1 ? 0 : Math.max(0, hit - Math.floor(len / 4));
+  let end = Math.min(text.length, start + len);
+  // Don't slice through a surrogate pair — a lone surrogate renders as U+FFFD (�). If the
+  // window starts on a low surrogate, its high half was already excluded, so skip it; if it
+  // ends just after a high surrogate, its low half is excluded, so drop the high half too.
+  const isLow = (c: number) => c >= 0xdc00 && c <= 0xdfff;
+  const isHigh = (c: number) => c >= 0xd800 && c <= 0xdbff;
+  if (start > 0 && isLow(text.charCodeAt(start))) start++;
+  if (end < text.length && isHigh(text.charCodeAt(end - 1))) end--;
   let out = text.slice(start, end).trim();
   if (start > 0) out = "…" + out;
   if (end < text.length) out = out + "…";

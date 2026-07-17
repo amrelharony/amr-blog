@@ -38,45 +38,52 @@ export async function openclawComplete(opts: {
   if (!API_KEY) throw new OpenClawError("AI service not configured");
 
   const controller = new AbortController();
+  // Keep the timeout armed through the body reads below, not just the headers: a stalled
+  // upstream body (slow-loris) would otherwise hang summarize/suggest-tags/auto-tag forever.
+  // Clearing it in a fetch-only finally (as an earlier version did) left .text()/.json()
+  // unbounded — the streaming client in lib/embeddings.ts keeps its timer armed for exactly
+  // this reason.
   const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-  let upstream: Response;
   try {
-    upstream = await fetch(API_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: "system", content: opts.system },
-          { role: "user", content: opts.user },
-        ],
-        stream: false,
-        max_tokens: opts.maxTokens ?? 220,
-        temperature: opts.temperature ?? 0.4,
-      }),
-      signal: controller.signal,
-    });
-  } catch {
-    throw new OpenClawError("AI server unreachable");
+    let upstream: Response;
+    try {
+      upstream = await fetch(API_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: [
+            { role: "system", content: opts.system },
+            { role: "user", content: opts.user },
+          ],
+          stream: false,
+          max_tokens: opts.maxTokens ?? 220,
+          temperature: opts.temperature ?? 0.4,
+        }),
+        signal: controller.signal,
+      });
+    } catch {
+      throw new OpenClawError("AI server unreachable");
+    }
+
+    if (!upstream.ok) {
+      let detail = "";
+      try {
+        detail = (await upstream.text()).slice(0, 200);
+      } catch {}
+      throw new OpenClawError(`AI request failed (${upstream.status})`, upstream.status, detail);
+    }
+
+    let content = "";
+    try {
+      const data = await upstream.json();
+      content = (data?.choices?.[0]?.message?.content || "").toString();
+    } catch {
+      throw new OpenClawError("Could not parse AI response");
+    }
+    if (!content.trim()) throw new OpenClawError("AI returned an empty response");
+    return content;
   } finally {
     clearTimeout(timeout);
   }
-
-  if (!upstream.ok) {
-    let detail = "";
-    try {
-      detail = (await upstream.text()).slice(0, 200);
-    } catch {}
-    throw new OpenClawError(`AI request failed (${upstream.status})`, upstream.status, detail);
-  }
-
-  let content = "";
-  try {
-    const data = await upstream.json();
-    content = (data?.choices?.[0]?.message?.content || "").toString();
-  } catch {
-    throw new OpenClawError("Could not parse AI response");
-  }
-  if (!content.trim()) throw new OpenClawError("AI returned an empty response");
-  return content;
 }

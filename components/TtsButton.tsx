@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 // Text-to-speech narration — ported from Js/blog-tts.js. Reads the article body
 // sentence-by-sentence with a floating player (prev/play-pause/next/speed/scrub),
 // highlighting the current block.
-export default function TtsButton() {
+export default function TtsButton({ slug }: { slug: string }) {
   const [playing, setPlaying] = useState(false);
   const [paused, setPaused] = useState(false);
   const [idx, setIdx] = useState(0);
@@ -31,6 +31,19 @@ export default function TtsButton() {
     },
     [],
   );
+  // This component instance is reused across /p/[slug] client navigations. When the
+  // article changes, stop narrating the previous one — otherwise the utterance chain
+  // keeps reading its (now detached) sentence nodes to the end and the player UI lingers.
+  useEffect(() => {
+    playingRef.current = false;
+    setPlaying(false);
+    setPaused(false);
+    setIdx(0);
+    idxRef.current = 0;
+    try {
+      speechSynthesis.cancel();
+    } catch {}
+  }, [slug]);
 
   const clearHighlights = () => sentences.current.forEach((s) => s.el.classList.remove("lb-tts-highlight"));
 

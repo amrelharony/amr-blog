@@ -69,10 +69,28 @@ export function isInternalHost(hostname: string): boolean {
   if (h === "metadata.google.internal") return true;
   if (h === "::1" || h === "::") return true;
   if (h.startsWith("fe80:") || h.startsWith("fc") || h.startsWith("fd")) return true; // IPv6 link-local + ULA
-  const mapped = h.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/); // IPv4-mapped IPv6
-  const ipv4 = mapped ? mapped[1] : (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(h) ? h : null);
+
+  // Reject IP-literal encodings that the OS resolver (inet_aton/getaddrinfo) still accepts
+  // but that slip past the dotted-quad check below — a documented SSRF bypass. A real DNS
+  // hostname is never all-digits or 0x-prefixed, so these are false-positive-free.
+  if (/^\d+$/.test(h)) return true; // bare decimal, e.g. 2130706433 == 127.0.0.1
+  if (/^0x[0-9a-f]+$/.test(h)) return true; // bare hex, e.g. 0x7f000001
+
+  // Normalize hex-form IPv4-mapped IPv6 (::ffff:7f00:1) to a dotted quad so the range
+  // checks below catch it; the dotted form (::ffff:127.0.0.1) is handled by `mapped`.
+  const hexMapped = h.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  const candidate = hexMapped
+    ? [24, 16, 8, 0].map((s) => ((((parseInt(hexMapped[1], 16) << 16) | parseInt(hexMapped[2], 16)) >>> s) & 255)).join(".")
+    : h;
+
+  const mapped = candidate.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/); // IPv4-mapped IPv6
+  const ipv4 = mapped ? mapped[1] : (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(candidate) ? candidate : null);
   if (ipv4) {
-    const p = ipv4.split(".").map(Number);
+    const octets = ipv4.split(".");
+    // A zero-padded octet is octal to inet_aton but decimal to Number() — reject the
+    // ambiguity rather than validate one host and fetch a different one (e.g. 017.0.0.1).
+    if (octets.some((o) => o.length > 1 && o[0] === "0")) return true;
+    const p = octets.map(Number);
     if (p.some((n) => n > 255)) return false; // not a real v4 — let it fail at fetch
     const [a, b] = p;
     if (a === 0 || a === 127 || a === 10) return true; // this-host, loopback, private

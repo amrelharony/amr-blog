@@ -123,6 +123,9 @@ export default function MascotChat() {
   const histRef = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
+  // Bumped by newChat() so an in-flight send() can detect it was superseded and skip
+  // writing the (now cleared) history, suggestions, and streamed text back in.
+  const chatGenRef = useRef(0);
   const [listening, setListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -282,6 +285,8 @@ export default function MascotChat() {
     setMsgs((m) => [...m, { role: "user", text: q }, { role: "assistant", text: "" }]);
     setStreaming(true);
     streamingRef.current = true;
+    const gen = chatGenRef.current;
+    const alive = () => chatGenRef.current === gen; // false once newChat() supersedes this run
     try {
       const w = window as Window & { _ensureChatAuth?: () => Promise<unknown> };
       if (w._ensureChatAuth) await w._ensureChatAuth();
@@ -299,11 +304,11 @@ export default function MascotChat() {
       setLimits({ daily: dUsed, dailyMax: dMax });
 
       if (res.status === 429) {
-        updateLast({ text: "You've reached your message limit — it resets automatically. Try again later!", error: true });
+        if (alive()) updateLast({ text: "You've reached your message limit — it resets automatically. Try again later!", error: true });
         return;
       }
       if (!res.ok || !res.body) {
-        updateLast({ text: "I couldn't reach the AI just now. Please try again in a moment.", error: true });
+        if (alive()) updateLast({ text: "I couldn't reach the AI just now. Please try again in a moment.", error: true });
         return;
       }
       const cats = (res.headers.get("x-kb-cats") || "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -315,6 +320,14 @@ export default function MascotChat() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        if (!alive()) {
+          // newChat() fired mid-stream — stop consuming (the /api/chat cancel handler
+          // aborts upstream) and don't touch the now-cleared message list.
+          try {
+            await reader.cancel();
+          } catch {}
+          break;
+        }
         buf += dec.decode(value, { stream: true });
         const lines = buf.split("\n");
         buf = lines.pop() || "";
@@ -333,10 +346,19 @@ export default function MascotChat() {
         }
       }
 
+      // If newChat() cleared the conversation while this was streaming, discard the
+      // result — writing it back would resurrect the "cleared" exchange into histRef,
+      // re-persist it, and repopulate follow-up chips for a conversation that's gone.
+      if (!alive()) return;
       if (!full.trim()) {
         updateLast({ text: "I don't have an answer for that yet — try one of the topics below!", error: true });
       } else {
         const [html, sources] = await Promise.all([renderMarkdown(full), findSources(q)]);
+        // Re-check AFTER the await: findSources is a Supabase round-trip and renderMarkdown
+        // dynamic-imports marked/dompurify on first use — a wide enough window for newChat()
+        // to fire. Without this second guard the cleared exchange is still pushed into
+        // histRef, re-persisted, and its follow-up chips restored over the fresh chat.
+        if (!alive()) return;
         updateLast({ text: full, html, sources });
         histRef.current.push({ role: "user", content: q }, { role: "assistant", content: full });
         histRef.current = histRef.current.slice(-20);
@@ -346,10 +368,14 @@ export default function MascotChat() {
       }
       setSuggestions(followUps(cats));
     } catch {
-      updateLast({ text: "Something went wrong. Please try again.", error: true });
+      if (alive()) updateLast({ text: "Something went wrong. Please try again.", error: true });
     } finally {
-      setStreaming(false);
-      streamingRef.current = false;
+      // Only clear streaming state for the run that still owns it — a superseding newChat()
+      // (or the send() it enabled) must not have its state stomped by this stale finally.
+      if (alive()) {
+        setStreaming(false);
+        streamingRef.current = false;
+      }
     }
   }
 
@@ -415,6 +441,11 @@ export default function MascotChat() {
   }
 
   const newChat = () => {
+    // Supersede any in-flight send() so its completion can't write back into the cleared
+    // conversation, and free the streaming lock so the next question can be sent.
+    chatGenRef.current++;
+    streamingRef.current = false;
+    setStreaming(false);
     setMsgs([]);
     histRef.current = [];
     try {

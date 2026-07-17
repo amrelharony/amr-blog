@@ -11,9 +11,13 @@ export const revalidate = 3600;
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://blog.amrelharony.com";
 
-/** CDATA-wrap arbitrary HTML; a literal "]]>" inside is split across sections. */
+/** CDATA-wrap arbitrary HTML; a literal "]]>" inside is split across sections. CDATA is
+ *  exempt from entity parsing but NOT from XML 1.0's ban on raw C0 control chars — a lone
+ *  0x0C (form feed, common in PDF-extracted article text) would make the whole feed
+ *  unparseable — so strip them here, matching esc()'s C0 stripping for the other fields. */
 function cdata(html: string): string {
-  return `<![CDATA[${html.replace(/\]\]>/g, "]]]]><![CDATA[>")}]]>`;
+  const clean = html.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
+  return `<![CDATA[${clean.replace(/\]\]>/g, "]]]]><![CDATA[>")}]]>`;
 }
 
 export async function GET() {

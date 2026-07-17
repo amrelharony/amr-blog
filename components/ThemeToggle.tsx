@@ -12,6 +12,11 @@ export default function ThemeToggle() {
 
   useEffect(() => {
     setModeState(getMode());
+    // Other pickers (Command Palette, applyMode) change the stored mode and dispatch this;
+    // re-read so this button's icon and cycle position don't go stale.
+    const onModeChange = () => setModeState(getMode());
+    window.addEventListener("thememodechange", onModeChange);
+    return () => window.removeEventListener("thememodechange", onModeChange);
   }, []);
 
   const cycle = () => {

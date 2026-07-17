@@ -91,12 +91,17 @@ export default function ArticleEngagement({
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
 
-  // hydrate local state
+  // hydrate local state. This client component is reused across /p/[slug] navigations,
+  // so re-sync everything keyed to the article — including the server-provided reaction
+  // counts, which otherwise stay frozen at the first article's values (useState ignores
+  // prop changes after mount) until the visitor reacts or hard-reloads.
   useEffect(() => {
+    setReactions(initialReactions || {});
     setMyRx(lsGet<Record<string, string[]>>("_lb_reactions", {})[articleId] || []);
     setLikedIds(lsGet<string[]>("_lb_comment_likes", []));
     setName(localStorage.getItem("_lb_commenter") || "");
     setNotifyEmail(localStorage.getItem("_lb_commenter_email") || "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [articleId, slug]);
 
   // view increment, once per session

@@ -59,8 +59,14 @@ export default function Intro() {
     let cancelled = false;
     let teardown: () => void = () => {};
     // If the animation chunk never arrives, drop the overlay rather than
-    // covering the page forever. Cleared as soon as the import resolves.
-    const chunkSafety = window.setTimeout(() => setGone(true), 5000);
+    // covering the page forever. Cleared as soon as the import resolves. Also mark
+    // `cancelled` so a chunk that resolves AFTER this fired doesn't run a full variation
+    // (incl. a WebGL context) into the now-hidden/detached overlay and attach the global
+    // skip listeners outside the normal teardown path.
+    const chunkSafety = window.setTimeout(() => {
+      cancelled = true;
+      setGone(true);
+    }, 5000);
 
     (async () => {
       let gsap: typeof import("gsap").gsap;

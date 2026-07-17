@@ -242,7 +242,7 @@ export default function LibraryClient() {
                 <li key={id}>
                   <Link href={`/p/${e.slug}`}>{e.title || e.slug}</Link>
                   <span className="lb-library-hmeta">
-                    {e.completed ? "finished" : `${Math.round((e.progress || 0) * 100)}%`}
+                    {e.completed ? "finished" : `${Math.round(e.progress || 0)}%`}
                     {e.last_read_at ? ` · ${fmtDate(e.last_read_at)}` : ""}
                   </span>
                 </li>

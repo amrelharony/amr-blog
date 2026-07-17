@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { applyTheme, resolveLight, getMode } from "@/lib/theme";
 
 // Floating article toolbar — ported from initArticleToolbar/initReadingSettings in
 // Js/blog-article.js: a bottom-right pill showing reading-time-left + a gear that
@@ -59,11 +60,25 @@ export default function ArticleToolbar({ minutes }: { minutes: number }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>({});
+  const themeApplied = useRef(false);
 
   useEffect(() => {
     const p = getPrefs();
     setPrefs(p);
     applyPrefs(p);
+    if (p.theme) themeApplied.current = true;
+  }, []);
+
+  // The reading-panel theme override writes light-mode/lb-sepia straight onto <html> —
+  // the same classes the global theme system owns — and ThemeManager caches its last value
+  // and won't reassert. So when this toolbar unmounts (leaving the article for a non-article
+  // page) restore the global theme, or the article's override leaks across the whole site.
+  useEffect(() => {
+    return () => {
+      if (!themeApplied.current) return;
+      document.documentElement.classList.remove("lb-sepia");
+      applyTheme(resolveLight(getMode()));
+    };
   }, []);
 
   useEffect(() => {
@@ -106,6 +121,7 @@ export default function ArticleToolbar({ minutes }: { minutes: number }) {
     } catch {}
     setPrefs(np);
     applyPrefs(np);
+    if (np.theme) themeApplied.current = true;
   };
 
   return (

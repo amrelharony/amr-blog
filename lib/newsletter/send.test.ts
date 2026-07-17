@@ -66,6 +66,43 @@ describe("runBulletinSend — update_bulletin_log resilience", () => {
     expect(h.events.find((e) => e[0] === "bulletin.update_log_failed")).toBeUndefined();
   }, 10_000);
 
+  it("resume anchors remaining to the frozen recipient_count when the list has grown", async () => {
+    // Run created at 200 subs; 90 already sent (batch_remaining=110 → offset=90).
+    // The list has since grown to 210. The next batch must be the ORIGINAL indices
+    // 90..179 and the stored remaining must be frozen-count based (200-90-90 = 20),
+    // NOT live-length based (210-90-90 = 30) — the latter pulls the next offset back
+    // to 170 and re-sends subscribers 170..179.
+    const subscribers = Array.from({ length: 210 }, (_, i) => ({ email: `s${i}@x`, unsubscribe_token: `t${i}`, job_title: null }));
+    const sentTo: string[] = [];
+    let updateBody: Record<string, unknown> | null = null;
+    const fetchMock = vi.fn(async (url: string, opts?: { body?: string }) => {
+      const u = String(url);
+      if (u.startsWith("https://api.resend.com")) {
+        sentTo.push(...(JSON.parse(opts!.body!).to as string[]));
+        return jsonRes({ id: "e" });
+      }
+      if (u.includes("/rpc/claim_pending_bulletin"))
+        return jsonRes([{ id: "log1", recipient_count: 200, batch_remaining: 110, articles_since: "2026-07-01T00:00:00Z" }]);
+      if (u.includes("/rpc/get_bulletin_articles"))
+        return jsonRes([{ title: "A", slug: "a", excerpt: null, cover_image: null, created_at: "2026-07-01T00:00:00Z", tags: [] }]);
+      if (u.includes("/rpc/get_bulletin_subscribers")) return jsonRes(subscribers);
+      if (u.includes("/rpc/update_bulletin_log")) {
+        updateBody = JSON.parse(opts!.body!);
+        return jsonRes(true);
+      }
+      throw new Error("unrouted fetch: " + u);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const runBulletinSend = await loadRun();
+    const { status, result } = await runBulletinSend();
+
+    expect(status).toBe(200);
+    expect(sentTo).toEqual(subscribers.slice(90, 180).map((s) => s.email)); // indices 90..179, no re-send
+    expect(updateBody).toMatchObject({ p_batch_remaining: 20, p_status: "pending" });
+    expect(result).toMatchObject({ ok: true, sent: 90, remaining: 20 });
+  }, 10_000);
+
   it("logs and rethrows when the update fails persistently (emails already out)", async () => {
     const fetchMock = routedFetch(handlersWith(() => jsonRes({ message: "down" }, false, 500)));
     vi.stubGlobal("fetch", fetchMock);

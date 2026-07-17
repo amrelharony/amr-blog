@@ -23,10 +23,12 @@ export default function ReviewComments({
   const [name, setName] = useState(reviewerName || "");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   const submit = async () => {
     if (!text.trim()) return;
     setBusy(true);
+    setErr(null);
     const reviewer = name.trim() || "Reviewer";
     const { error } = await sb.rpc("add_review_comment", {
       p_token: token,
@@ -37,6 +39,9 @@ export default function ReviewComments({
     if (!error) {
       setComments((c) => [...c, { text: text.trim(), reviewer, created_at: new Date().toISOString() }]);
       setText("");
+    } else {
+      // Don't fail silently — the reviewer would otherwise think their feedback saved.
+      setErr("Couldn't save your feedback. Please try again.");
     }
     setBusy(false);
   };
@@ -78,6 +83,11 @@ export default function ReviewComments({
         <button className="lb-comment-submit" disabled={busy || !text.trim()} onClick={submit}>
           {busy ? "Sending…" : "Send feedback"}
         </button>
+        {err && (
+          <p role="alert" style={{ color: "#f87171", fontSize: 13, marginTop: 8 }}>
+            {err}
+          </p>
+        )}
       </div>
     </div>
   );

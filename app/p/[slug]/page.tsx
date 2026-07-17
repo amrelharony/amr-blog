@@ -316,7 +316,7 @@ export default async function ArticlePage({ params }: Params) {
                 <i className="fa-solid fa-envelope" aria-hidden="true" />
               </a>
               <ShareActions url={url} title={a.title} text={shareText} />
-              <TtsButton />
+              <TtsButton slug={a.slug} />
               <CollectionsManager articleId={a.id} slug={a.slug} title={a.title} coverImage={a.cover_image || ""} />
             </div>
           </footer>
