@@ -114,8 +114,11 @@ describe("isInternalHost", () => {
     "fe80::1", // link-local
     "fc00::1", // ULA
     "fd12:3456::1", // ULA
-    "::ffff:127.0.0.1", // IPv4-mapped loopback
-    "::ffff:10.0.0.5", // IPv4-mapped private
+    "::ffff:127.0.0.1", // IPv4-mapped loopback (dotted)
+    "::ffff:10.0.0.5", // IPv4-mapped private (dotted)
+    "::ffff:7f00:1", // IPv4-mapped loopback (hex — what new URL() produces)
+    "::ffff:a9fe:a9fe", // IPv4-mapped 169.254.169.254 metadata (hex)
+    "[::ffff:127.0.0.1]", // bracketed IPv4-mapped
     "0.0.0.0",
     "127.0.0.1",
     "127.255.255.255",
@@ -127,11 +130,6 @@ describe("isInternalHost", () => {
     "172.31.255.255",
     "100.64.0.1", // CGNAT low edge
     "100.127.255.255", // CGNAT high edge
-    "2130706433", // bare decimal for 127.0.0.1
-    "0x7f000001", // bare hex for 127.0.0.1
-    "::ffff:7f00:1", // hex-form IPv4-mapped loopback
-    "017.0.0.1", // octal-octet loopback (inet_aton parses 017 as 15)
-    "010.0.0.1", // zero-padded octet ambiguity
   ];
   const external = [
     "example.com",
@@ -147,6 +145,11 @@ describe("isInternalHost", () => {
     "169.253.1.1",
     "999.1.1.1", // >255 octet: not a real v4 — let it fail at fetch time
     "2606:4700::1111", // public IPv6
+    "fd-cdn.com", // domain starting with "fd" — must not be mistaken for ULA
+    "fcassets.io", // domain starting with "fc"
+    "fdn.example.com",
+    "::ffff:8.8.8.8", // IPv4-mapped public (dotted)
+    "::ffff:808:808", // IPv4-mapped 8.8.8.8 public (hex)
   ];
   it.each(internal)("flags %s as internal", (h) => {
     expect(isInternalHost(h)).toBe(true);

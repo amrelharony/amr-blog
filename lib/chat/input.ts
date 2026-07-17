@@ -5,11 +5,24 @@
 
 export const MAX_MSG_LEN = 500;
 export const MAX_HISTORY = 10;
+// Cap the input the tag-stripper scans. The longest field any caller sanitizes is
+// pageContext, sliced to 1200 downstream, so 8 KB is generous headroom for every
+// legitimate value. Without this cap sanitize() runs on the raw request body, and
+// the <…> scan below backtracks quadratically on a long run of "<" (no closing ">"):
+// ~80 s of event-loop-blocking CPU for a single ~400 KB body — a cheap DoS, since
+// this runs before the length check and rate limit in app/api/chat/route.ts.
+const MAX_SANITIZE_INPUT = 8192;
 
 /** Strip HTML tags and C0 control chars (keeping \t \n \r), then trim. */
 export function sanitize(str: unknown): string {
   if (typeof str !== "string") return "";
-  return str.replace(/<[^>]*>/g, "").replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "").trim();
+  // Bounded quantifier ({0,2048}) + the input cap keep this linear on hostile input;
+  // same ReDoS reasoning as lib/markdown stripMarkdown/cleanTldr.
+  return str
+    .slice(0, MAX_SANITIZE_INPUT)
+    .replace(/<[^>]{0,2048}>/g, "")
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
+    .trim();
 }
 
 export type Msg = { role: "user" | "assistant"; content: string };

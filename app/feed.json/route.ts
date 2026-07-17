@@ -10,12 +10,15 @@ const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://blog.amrelharony.com";
 
 export async function GET() {
   const sb = createPublicClient();
-  const { data } = await sb
+  const { data, error } = await sb
     .from("longform_articles")
     .select("title,slug,excerpt,content,created_at,updated_at,tags")
     .eq("published", true)
     .order("created_at", { ascending: false })
     .limit(50);
+  // Throw on a DB error rather than caching an empty feed for an hour (ISR keeps
+  // serving the last good render).
+  if (error) throw error;
   const articles = (data ?? []) as {
     title: string;
     slug: string;

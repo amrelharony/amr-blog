@@ -161,7 +161,15 @@ export default function PdfViewer({ url, name }: { url: string; name?: string | 
           resizeTimer = setTimeout(() => {
             if (cancelled || !doc) return;
             for (let n = 1; n <= doc.numPages; n++) release(n);
-            for (const n of visible) void renderPage(n);
+            const renderVisible = () => {
+              for (const n of visible) void renderPage(n);
+            };
+            renderVisible();
+            // release() cancels in-flight renders, but each one's `inFlight` flag
+            // clears only after the cancelled render unwinds (a microtask later), so
+            // the renderPage() calls above bail for those pages and leave them blank.
+            // Retry on the next macrotask, once inFlight has drained.
+            setTimeout(renderVisible, 0);
           }, 150);
         });
         resizeObs.observe(container);

@@ -16,6 +16,12 @@ export default function TtsButton({ slug }: { slug: string }) {
   const playingRef = useRef(false);
   const idxRef = useRef(0);
   const speedRef = useRef(1);
+  // Bumped on every new/cancelled utterance so a cancelled utterance's late `onend`
+  // (Chrome/Firefox fire `end` on cancel) can't queue an extra sentence and desync
+  // the highlight/index — each onend only advances if its generation is still current.
+  const genRef = useRef(0);
+
+  const clearHighlights = () => sentences.current.forEach((s) => s.el.classList.remove("lb-tts-highlight"));
 
   useEffect(() => {
     setSupported(typeof window !== "undefined" && "speechSynthesis" in window);
@@ -23,29 +29,26 @@ export default function TtsButton({ slug }: { slug: string }) {
   useEffect(() => {
     speedRef.current = speed;
   }, [speed]);
+  // Reset when the article changes: the App Router reuses this instance across
+  // /p/[slug] navigations, so without this the previous article's narration keeps
+  // playing (against now-detached DOM) after the reader opens a new post. Also
+  // cancels on unmount. Keyed on `slug`, matching ArticleReader/ArticleAnimations.
   useEffect(
     () => () => {
+      genRef.current++;
+      playingRef.current = false;
       try {
         speechSynthesis.cancel();
       } catch {}
+      clearHighlights();
+      sentences.current = [];
+      idxRef.current = 0;
+      setPlaying(false);
+      setPaused(false);
+      setIdx(0);
     },
-    [],
+    [slug],
   );
-  // This component instance is reused across /p/[slug] client navigations. When the
-  // article changes, stop narrating the previous one — otherwise the utterance chain
-  // keeps reading its (now detached) sentence nodes to the end and the player UI lingers.
-  useEffect(() => {
-    playingRef.current = false;
-    setPlaying(false);
-    setPaused(false);
-    setIdx(0);
-    idxRef.current = 0;
-    try {
-      speechSynthesis.cancel();
-    } catch {}
-  }, [slug]);
-
-  const clearHighlights = () => sentences.current.forEach((s) => s.el.classList.remove("lb-tts-highlight"));
 
   const speakAt = (i: number) => {
     const list = sentences.current;
@@ -53,6 +56,7 @@ export default function TtsButton({ slug }: { slug: string }) {
       stop();
       return;
     }
+    const gen = ++genRef.current;
     idxRef.current = i;
     setIdx(i);
     clearHighlights();
@@ -67,7 +71,9 @@ export default function TtsButton({ slug }: { slug: string }) {
       voices.find((x) => x.lang.startsWith("en"));
     if (v) u.voice = v;
     u.onend = () => {
-      if (playingRef.current) speakAt(idxRef.current + 1);
+      // Ignore the `end` fired by a cancel (jump/stop/speed change) — only the
+      // current generation's natural end should advance to the next sentence.
+      if (playingRef.current && gen === genRef.current) speakAt(idxRef.current + 1);
     };
     speechSynthesis.speak(u);
   };
@@ -86,6 +92,7 @@ export default function TtsButton({ slug }: { slug: string }) {
     speakAt(0);
   };
   const stop = () => {
+    genRef.current++; // invalidate the current utterance's onend before cancelling
     playingRef.current = false;
     setPlaying(false);
     setPaused(false);
@@ -104,6 +111,7 @@ export default function TtsButton({ slug }: { slug: string }) {
     }
   };
   const jump = (i: number) => {
+    genRef.current++; // invalidate the current utterance's onend before cancelling
     try {
       speechSynthesis.cancel();
     } catch {}

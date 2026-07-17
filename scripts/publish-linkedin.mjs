@@ -318,8 +318,11 @@ async function publishThoughts() {
 
 async function publishArticles() {
   const now = new Date().toISOString();
+  // Mirror publishThoughts' predicate: an immediate publish (published + no schedule),
+  // or a scheduled post that has come due. A bare `published.eq.true` would also match
+  // an article that is published but has a still-FUTURE scheduled_at, posting it early.
   const rows = await sbQuery('longform_articles',
-    `select=id,title,slug,excerpt,cover_image,published,scheduled_at,created_at&linkedin_posted=eq.false&or=(published.eq.true,and(scheduled_at.not.is.null,scheduled_at.lte.${now}))`
+    `select=id,title,slug,excerpt,cover_image,published,scheduled_at,created_at&linkedin_posted=eq.false&or=(and(published.eq.true,scheduled_at.is.null),and(scheduled_at.not.is.null,scheduled_at.lte.${now}))`
   );
 
   const fresh = rows.filter(withinWindow);

@@ -206,6 +206,10 @@ export default function CommandPalette() {
     switch (e.key) {
       case "Escape":
         e.preventDefault();
+        // Stop the NATIVE event too: MascotChat listens for Escape on window, and a
+        // React synthetic stopPropagation wouldn't reach it — without this, dismissing
+        // the palette with Escape also closes an open chat panel.
+        e.nativeEvent.stopImmediatePropagation();
         close();
         break;
       case "ArrowDown":

@@ -18,13 +18,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ categor
   if (!cat) return new Response("Not found", { status: 404 });
 
   const sb = createPublicClient();
-  const { data } = await sb
+  const { data, error } = await sb
     .from("longform_articles")
     .select("title,slug,excerpt,created_at,tags")
     .eq("published", true)
     .eq("category", cat.label)
     .order("created_at", { ascending: false })
     .limit(50);
+  // Throw on a DB error rather than caching an empty category feed for an hour.
+  if (error) throw error;
   const articles = (data ?? []) as {
     title: string;
     slug: string;

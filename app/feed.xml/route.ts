@@ -11,23 +11,26 @@ export const revalidate = 3600;
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://blog.amrelharony.com";
 
-/** CDATA-wrap arbitrary HTML; a literal "]]>" inside is split across sections. CDATA is
- *  exempt from entity parsing but NOT from XML 1.0's ban on raw C0 control chars — a lone
- *  0x0C (form feed, common in PDF-extracted article text) would make the whole feed
- *  unparseable — so strip them here, matching esc()'s C0 stripping for the other fields. */
+/** CDATA-wrap arbitrary HTML; a literal "]]>" inside is split across sections. */
 function cdata(html: string): string {
+  // Strip XML-1.0-illegal C0 control chars first (keep tab/LF/CR): CDATA does NOT
+  // legalize them, so one stray \x0B in a single article body would make the WHOLE
+  // feed un-parseable for every reader. Mirrors esc() in lib/format.ts.
   const clean = html.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
   return `<![CDATA[${clean.replace(/\]\]>/g, "]]]]><![CDATA[>")}]]>`;
 }
 
 export async function GET() {
   const sb = createPublicClient();
-  const { data } = await sb
+  const { data, error } = await sb
     .from("longform_articles")
     .select("title,slug,excerpt,content,created_at,tags")
     .eq("published", true)
     .order("created_at", { ascending: false })
     .limit(50);
+  // Throw on a DB error rather than silently caching an empty feed for an hour
+  // (ISR keeps serving the last good render; a 0-item feed can reset reader state).
+  if (error) throw error;
   const articles = (data ?? []) as {
     title: string;
     slug: string;

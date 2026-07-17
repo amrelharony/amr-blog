@@ -123,9 +123,6 @@ export default function MascotChat() {
   const histRef = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
-  // Bumped by newChat() so an in-flight send() can detect it was superseded and skip
-  // writing the (now cleared) history, suggestions, and streamed text back in.
-  const chatGenRef = useRef(0);
   const [listening, setListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -133,6 +130,11 @@ export default function MascotChat() {
   const finalTranscriptRef = useRef("");
   const sendRef = useRef<(raw: string) => void>(() => {});
   const openRef = useRef(false);
+  // Aborts an in-flight /api/chat stream, and a generation counter bumped by
+  // newChat() so a stream that's still finishing can't resurrect the cleared
+  // conversation into histRef/localStorage/suggestions.
+  const abortRef = useRef<AbortController | null>(null);
+  const chatGenRef = useRef(0);
 
   // Open hooks for the mascot.
   useEffect(() => {
@@ -285,8 +287,11 @@ export default function MascotChat() {
     setMsgs((m) => [...m, { role: "user", text: q }, { role: "assistant", text: "" }]);
     setStreaming(true);
     streamingRef.current = true;
+    // Snapshot the conversation generation; if newChat() runs mid-stream it bumps
+    // this and aborts the fetch, so the terminal writes below are skipped.
     const gen = chatGenRef.current;
-    const alive = () => chatGenRef.current === gen; // false once newChat() supersedes this run
+    const ac = new AbortController();
+    abortRef.current = ac;
     try {
       const w = window as Window & { _ensureChatAuth?: () => Promise<unknown> };
       if (w._ensureChatAuth) await w._ensureChatAuth();
@@ -297,6 +302,7 @@ export default function MascotChat() {
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: q.slice(0, 500), history: histRef.current.slice(-10), pageContext: articlePageContext() }),
+        signal: ac.signal,
       });
 
       const dMax = parseInt(res.headers.get("x-ratelimit-daily-max") || "25", 10);
@@ -304,11 +310,11 @@ export default function MascotChat() {
       setLimits({ daily: dUsed, dailyMax: dMax });
 
       if (res.status === 429) {
-        if (alive()) updateLast({ text: "You've reached your message limit — it resets automatically. Try again later!", error: true });
+        updateLast({ text: "You've reached your message limit — it resets automatically. Try again later!", error: true });
         return;
       }
       if (!res.ok || !res.body) {
-        if (alive()) updateLast({ text: "I couldn't reach the AI just now. Please try again in a moment.", error: true });
+        updateLast({ text: "I couldn't reach the AI just now. Please try again in a moment.", error: true });
         return;
       }
       const cats = (res.headers.get("x-kb-cats") || "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -320,14 +326,6 @@ export default function MascotChat() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        if (!alive()) {
-          // newChat() fired mid-stream — stop consuming (the /api/chat cancel handler
-          // aborts upstream) and don't touch the now-cleared message list.
-          try {
-            await reader.cancel();
-          } catch {}
-          break;
-        }
         buf += dec.decode(value, { stream: true });
         const lines = buf.split("\n");
         buf = lines.pop() || "";
@@ -346,19 +344,14 @@ export default function MascotChat() {
         }
       }
 
-      // If newChat() cleared the conversation while this was streaming, discard the
-      // result — writing it back would resurrect the "cleared" exchange into histRef,
-      // re-persist it, and repopulate follow-up chips for a conversation that's gone.
-      if (!alive()) return;
+      // Bail if the conversation was reset (New chat) while the stream finished —
+      // otherwise we'd re-add the discarded exchange to history and suggestions.
+      if (gen !== chatGenRef.current) return;
       if (!full.trim()) {
         updateLast({ text: "I don't have an answer for that yet — try one of the topics below!", error: true });
       } else {
         const [html, sources] = await Promise.all([renderMarkdown(full), findSources(q)]);
-        // Re-check AFTER the await: findSources is a Supabase round-trip and renderMarkdown
-        // dynamic-imports marked/dompurify on first use — a wide enough window for newChat()
-        // to fire. Without this second guard the cleared exchange is still pushed into
-        // histRef, re-persisted, and its follow-up chips restored over the fresh chat.
-        if (!alive()) return;
+        if (gen !== chatGenRef.current) return;
         updateLast({ text: full, html, sources });
         histRef.current.push({ role: "user", content: q }, { role: "assistant", content: full });
         histRef.current = histRef.current.slice(-20);
@@ -367,15 +360,14 @@ export default function MascotChat() {
         } catch {}
       }
       setSuggestions(followUps(cats));
-    } catch {
-      if (alive()) updateLast({ text: "Something went wrong. Please try again.", error: true });
+    } catch (e) {
+      // An abort (New chat / navigation) is expected — don't flash an error.
+      if ((e as Error)?.name === "AbortError" || gen !== chatGenRef.current) return;
+      updateLast({ text: "Something went wrong. Please try again.", error: true });
     } finally {
-      // Only clear streaming state for the run that still owns it — a superseding newChat()
-      // (or the send() it enabled) must not have its state stomped by this stale finally.
-      if (alive()) {
-        setStreaming(false);
-        streamingRef.current = false;
-      }
+      if (abortRef.current === ac) abortRef.current = null;
+      setStreaming(false);
+      streamingRef.current = false;
     }
   }
 
@@ -441,9 +433,11 @@ export default function MascotChat() {
   }
 
   const newChat = () => {
-    // Supersede any in-flight send() so its completion can't write back into the cleared
-    // conversation, and free the streaming lock so the next question can be sent.
+    // Invalidate + abort any in-flight stream so it can't write back into the
+    // freshly-cleared history (see the generation guard in send()).
     chatGenRef.current++;
+    abortRef.current?.abort();
+    abortRef.current = null;
     streamingRef.current = false;
     setStreaming(false);
     setMsgs([]);

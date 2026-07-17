@@ -326,7 +326,12 @@ export async function getSeriesSiblings(seriesName: string): Promise<SeriesSibli
     .select("id,title,slug,series_order")
     .eq("published", true)
     .eq("series_name", seriesName)
-    .order("series_order", { ascending: true });
+    // created_at (then id) breaks ties: the editor defaults every part to
+    // series_order = 0, and without a stable tiebreaker Postgres row order is
+    // unspecified, so "Part N of M" and prev/next nav could swap between ISR builds.
+    .order("series_order", { ascending: true })
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
   if (error) throw error;
   return (data ?? []) as SeriesSibling[];
 }

@@ -38,19 +38,6 @@ function lsSet(k: string, v: unknown) {
 
 const viewed = new Set<string>();
 
-// relTime() reads Date.now(), which differs between the ISR snapshot and the client view,
-// so rendering it directly produces a hydration mismatch on essentially every /thoughts
-// visit. Render a deterministic UTC date on the server + first client render (identical on
-// both), then swap to the live relative label after mount.
-function RelTime({ iso }: { iso: string }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) {
-    return <>{new Date(iso).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" })}</>;
-  }
-  return <>{relTime(iso)}</>;
-}
-
 export default function ThoughtsFeed({ initial }: { initial: Thought[] }) {
   const sb = getBrowserClient();
   const [posts, setPosts] = useState<Thought[]>(initial);
@@ -72,7 +59,7 @@ export default function ThoughtsFeed({ initial }: { initial: Thought[] }) {
   const loadMore = async () => {
     if (loading || !hasMore) return;
     setLoading(true);
-    const { data } = await sb
+    const { data, error } = await sb
       .from("microblog")
       .select("*")
       // Match the RLS predicate at the app layer (consistent with getThoughts).
@@ -81,6 +68,12 @@ export default function ThoughtsFeed({ initial }: { initial: Thought[] }) {
       .order("pinned", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1);
+    // A transient error yields data=null; treat it as "retry later", not "end of
+    // feed" — otherwise one network blip permanently hides the Load More control.
+    if (error) {
+      setLoading(false);
+      return;
+    }
     const rows = (data || []) as Thought[];
     // De-dupe by id: range/offset pagination over a newest-first, mutable list can
     // re-surface a row if a post was inserted/removed between page fetches.
@@ -266,7 +259,7 @@ function PostCard({
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<{ id: string; author: string; content: string; created_at: string; author_id?: string | null }[]>([]);
   const [cInput, setCInput] = useState("");
-  const [cSending, setCSending] = useState(false);
+  const [cBusy, setCBusy] = useState(false);
   const sb = getBrowserClient();
 
   useEffect(() => {
@@ -299,11 +292,11 @@ function PostCard({
   };
 
   const sendComment = async () => {
-    // Guard against double-submit: Enter key-repeat (hold Enter) and Enter+click both
-    // fire this, and the RPC only dedupes by rate limit — without this the same comment
-    // posts 2–5 times.
-    if (cSending || !cInput.trim()) return;
-    setCSending(true);
+    // Guard against double-submit: the Enter key and the Send button both call this,
+    // and the input isn't cleared until the RPC resolves — without this a fast
+    // double-tap posts the same comment twice (the server limit doesn't dedupe).
+    if (cBusy || !cInput.trim()) return;
+    setCBusy(true);
     try {
       const author = localStorage.getItem("_blog_commenter") || "Visitor";
       localStorage.setItem("_blog_commenter", author);
@@ -320,7 +313,7 @@ function PostCard({
         await loadComments();
       }
     } finally {
-      setCSending(false);
+      setCBusy(false);
     }
   };
 
@@ -411,7 +404,10 @@ function PostCard({
 
       <div className="blog-post-meta">
         <span>
-          <RelTime iso={post.created_at} />
+          {/* Relative time is computed from wall-clock now: the ISR-snapshot value and
+              the client's hydration value differ for recent posts. Suppress the
+              expected text mismatch so React keeps the (fresher) client value. */}
+          <span suppressHydrationWarning>{relTime(post.created_at)}</span>
           {post.content ? <span className="blog-reading-time">· {readingTime(post.content)}</span> : null}
           {post.views ? <span className="blog-views">👁 {post.views}</span> : null}
         </span>
@@ -457,7 +453,7 @@ function PostCard({
                     {c.author_id === "82dd079f-de7b-477b-84eb-6d34d9eded05" && (
                       <span className="blog-comment-owner" title="Verified — Amr"> ✓</span>
                     )}
-                    <span className="blog-comment-time"><RelTime iso={c.created_at} /></span>
+                    <span className="blog-comment-time">{relTime(c.created_at)}</span>
                   </span>
                   <div style={{ whiteSpace: "pre-wrap" }}>{c.content}</div>
                 </div>
@@ -477,7 +473,7 @@ function PostCard({
                 if (e.key === "Enter") sendComment();
               }}
             />
-            <button className="blog-comment-send" onClick={sendComment} disabled={cSending}>
+            <button className="blog-comment-send" onClick={sendComment} disabled={cBusy}>
               Send
             </button>
           </div>
