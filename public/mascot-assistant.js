@@ -36,7 +36,12 @@
   filter: drop-shadow(0 8px 24px rgba(0,225,255,.18)) drop-shadow(0 20px 40px rgba(0,0,0,.25));
 }
 .mascot-float-label {
-  position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%);
+  /* The model renders with its feet at ~69% of the box height, so the bottom
+     ~30% of the canvas is always empty — pinning the label to the box edge left
+     it floating 81px under the mascot. Sit it just below the feet instead. The
+     % keeps the gap identical at both breakpoints (160x280 / 100x180 mobile);
+     the -20px leaves room for the 9px-tall label plus a small margin. */
+  position: absolute; bottom: calc(30% - 20px); left: 50%; transform: translateX(-50%);
   font-family: 'JetBrains Mono', monospace; font-size: 7px;
   letter-spacing: 1.5px; text-transform: uppercase;
   color: rgba(0,225,255,.45); text-shadow: 0 0 8px rgba(0,225,255,.2);
