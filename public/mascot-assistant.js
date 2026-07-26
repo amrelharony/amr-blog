@@ -3910,11 +3910,13 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
   }
 
   // Load Three.js + model on all viewports (mobile included, like the main site).
-  // Only reduced-motion falls back to the emoji launcher. GLB is cached immutably (1yr).
+  // Only reduced-motion falls back to the emoji launcher.
   if (!A.RM) {
     loadThreeExtensions().then(function() {
       initScene(floatEl);
-      // Bump ?v= whenever /mascot.glb changes — it's cached immutably for 1 year (see vercel.json)
+      // No ?v= needed: /mascot.glb is served `max-age=0, must-revalidate` (Vercel's
+      // default for public/), and sw.js only cache-firsts /_next/static/*. A new
+      // deploy ships a new ETag, so clients pick it up on the next load.
       return loadGLB('/mascot.glb', function(pct) {
         // Loading progress available if needed
       });
