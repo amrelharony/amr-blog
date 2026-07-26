@@ -16,7 +16,8 @@ import { CATEGORIES } from "@/lib/categories";
 type Action =
   | { kind: "push"; href: string }
   | { kind: "navigate"; href: string } // full navigation (non-HTML routes like RSS)
-  | { kind: "theme"; mode: ThemeMode };
+  | { kind: "theme"; mode: ThemeMode }
+  | { kind: "chat" }; // opens MascotChat (the only launcher where the mascot is hidden)
 
 interface Item {
   id: string;
@@ -101,6 +102,13 @@ export default function CommandPalette() {
       { id: "nav-series", icon: "fa-layer-group", label: "Series", action: { kind: "push", href: "/series" } },
       { id: "nav-library", icon: "fa-book-bookmark", label: "Your library", action: { kind: "push", href: "/library" } },
       { id: "nav-rss", icon: "fa-rss", label: "RSS Feed", action: { kind: "navigate", href: "/feed.xml" } },
+      {
+        id: "chat",
+        icon: "fa-comments",
+        label: "Ask ElharonyClaw",
+        hint: "AI assistant — article-aware",
+        action: { kind: "chat" },
+      },
       ...(["auto", "light", "dark"] as ThemeMode[]).map<Item>((m) => ({
         id: `theme-${m}`,
         icon: THEME_ICONS[m],
@@ -192,6 +200,13 @@ export default function CommandPalette() {
         close();
         window.location.assign(item.action.href);
         break;
+      case "chat": {
+        close();
+        // MascotChat lives in the root layout, so this works even where the mascot
+        // itself is hidden (mobile article view) or never booted.
+        (window as Window & { _openMascotChat?: () => void })._openMascotChat?.();
+        break;
+      }
       case "theme": {
         const m = item.action.mode;
         applyMode(m); // shared persist + notify ritual (lib/theme.ts)

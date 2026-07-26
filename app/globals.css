@@ -115,6 +115,13 @@
 body .mascot-float {
   top: 54px;
 }
+/* Mobile article view: no room for a 160px mascot parked over the text column, and it
+   competes with the reading. Mascot.tsx owns the condition (route + viewport) and also
+   parks the render loop / skips the boot entirely — this is just the visual gate. */
+body.mascot-off .mascot-float,
+body.mascot-off .mascot-panel {
+  display: none !important;
+}
 
 @media (pointer: coarse) {
   .cg,
@@ -405,4 +412,46 @@ img {
 .sc-weather {
   font-size: 11px;
   letter-spacing: 0.2px;
+}
+.sc-group {
+  display: flex;
+  align-items: stretch;
+}
+/* Desktop has room for all four — the collapse toggle is mobile-only. */
+.sc-toggle {
+  display: none;
+}
+
+/* Phone: collapse the bar to a single ⋯ button; tap to slide the group out.
+   `visibility` (not just opacity) so the hidden controls leave the tab order.
+   Deliberately a tighter cut than the mascot's 768px article gate (Mascot.tsx) —
+   tablets have room for four small buttons, but not for the mascot. */
+@media (max-width: 600px) {
+  .sc-toggle {
+    display: flex;
+  }
+  .sc-group {
+    max-width: 0;
+    opacity: 0;
+    visibility: hidden;
+    overflow: hidden;
+    transition: max-width 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease,
+      visibility 0.3s;
+  }
+  /* Expanded — the border-left is the hairline between the toggle and the group
+     (the .sc-btn + .sc-btn divider can't cross the wrapper). */
+  .site-controls.open .sc-group {
+    max-width: 240px;
+    opacity: 1;
+    visibility: visible;
+    border-left: 1px solid var(--border);
+    margin-left: 2px;
+    padding-left: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-group {
+    transition: none;
+  }
 }
