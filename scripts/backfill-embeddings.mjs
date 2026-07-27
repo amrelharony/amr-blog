@@ -32,8 +32,19 @@ for (const [k, v] of Object.entries({ SUPA_URL, SERVICE_KEY, EMBED_FN_URL, EMBED
   }
 }
 
+// `--limit` with a missing or non-numeric value used to silently mean "0 rows"
+// (Number(undefined || 0)) or "unbounded" (NaN, which fails every >= comparison) —
+// both reported as a clean exit. A typo in the documented invocation must fail loudly.
 const LIMIT_ARG = process.argv.indexOf("--limit");
-const MAX_ROWS = LIMIT_ARG !== -1 ? Number(process.argv[LIMIT_ARG + 1] || 0) : Infinity;
+let MAX_ROWS = Infinity;
+if (LIMIT_ARG !== -1) {
+  const raw = process.argv[LIMIT_ARG + 1];
+  MAX_ROWS = Number(raw);
+  if (!Number.isSafeInteger(MAX_ROWS) || MAX_ROWS < 1) {
+    console.error(`ERROR: --limit needs a positive integer (got ${raw === undefined ? "nothing" : `"${raw}"`}).`);
+    process.exit(1);
+  }
+}
 const PAGE = 50;
 const PACE_MS = 300;
 
@@ -66,11 +77,17 @@ function buildInput(a) {
     .slice(0, 2000);
 }
 
-async function fetchBatch() {
+// `after` is an id cursor. Rows with no embeddable text are never written, so they
+// stay in the `embedding is null` set forever — without the cursor the same page came
+// back every time, and the "every row skipped" guard that stopped the resulting
+// infinite loop also aborted the whole run when the FIRST page happened to be all
+// skips, leaving thousands of embeddable rows behind it untouched.
+async function fetchBatch(after) {
   return withRetry(async () => {
     const r = await fetch(
       `${SUPA_URL}/rest/v1/longform_articles` +
-        `?select=id,title,tldr,excerpt,content&embedding=is.null&order=id.asc&limit=${PAGE}`,
+        `?select=id,title,tldr,excerpt,content&embedding=is.null&order=id.asc&limit=${PAGE}` +
+        (after ? `&id=gt.${encodeURIComponent(after)}` : ""),
       { headers: sbHeaders },
     );
     if (!r.ok) throw new Error(`select HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
@@ -110,16 +127,22 @@ async function saveEmbedding(id, vector) {
 
 let done = 0;
 let skipped = 0;
+// --limit bounds rows actually EMBEDDED, so `--limit 20` spot-checks 20 real
+// embeddings rather than being eaten by unembeddable rows.
+let cursor = null;
 for (;;) {
-  if (done + skipped >= MAX_ROWS) break;
-  const batch = await fetchBatch();
+  if (done >= MAX_ROWS) break;
+  const batch = await fetchBatch(cursor);
   if (batch.length === 0) break;
   for (const row of batch) {
-    if (done + skipped >= MAX_ROWS) break;
+    // Advance the cursor for every row we look at, embedded or skipped — that is what
+    // guarantees forward progress across pages.
+    cursor = row.id;
+    if (done >= MAX_ROWS) break;
     const input = buildInput(row);
     if (!input) {
-      // Nothing embeddable — stamp embedded_at only? No: leave NULL is a retry
-      // loop trap since select filters on embedding. Store a zero-info skip log.
+      // Nothing embeddable. We deliberately leave `embedding` NULL (stamping it would
+      // fake a real vector); the id cursor is what keeps this from being a retry loop.
       console.warn(`  skip (empty input): ${row.id}`);
       skipped++;
       continue;
@@ -130,7 +153,5 @@ for (;;) {
     if (done % 25 === 0) console.log(`embedded ${done}…`);
     await sleep(PACE_MS);
   }
-  // If every row in the page was skipped we'd refetch the same page forever.
-  if (batch.every((r) => !buildInput(r))) break;
 }
 console.log(`Done. embedded=${done} skipped=${skipped}`);

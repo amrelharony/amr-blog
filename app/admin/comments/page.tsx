@@ -37,6 +37,7 @@ export default function AdminComments() {
       .from("article_comments")
       .select("*", { count: "exact" })
       .order("created_at", { ascending: false })
+      .order("id", { ascending: false }) // stable tiebreaker so offset paging can't skip/dupe on tied dates
       .range(page * PAGE, page * PAGE + PAGE - 1);
     if (status !== "all") q = q.eq("status", status);
     const { data, count: c } = await q;

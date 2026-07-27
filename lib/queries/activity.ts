@@ -40,7 +40,20 @@ function isValidDay(s: string): boolean {
   return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === s;
 }
 
-/** Sanitize searchParams: malformed dates are dropped, page clamps to ≥ 1. */
+// Upper bound on ?page=. Without one, Number() happily yields 1e20 or Infinity, and
+// the resulting offset serializes into the PostgREST Range header as "5e+21"/"Infinity"
+// — a parse error, NOT the PGRST103 that fetchActivityPage catches, so the "show an
+// empty page instead of a crash" guard was bypassed and /admin/activity 500'd. A
+// million pages is far past any real activity_log and keeps the arithmetic exact.
+const MAX_ACTIVITY_PAGE = 1_000_000;
+
+function clampPage(raw: string): number {
+  const n = Math.floor(Number(raw));
+  if (!Number.isSafeInteger(n) || n < 1) return 1;
+  return Math.min(n, MAX_ACTIVITY_PAGE);
+}
+
+/** Sanitize searchParams: malformed dates are dropped, page clamps to 1…1e6. */
 export function parseActivityFilters(
   sp: Record<string, string | string[] | undefined>,
 ): ActivityFilters {
@@ -51,7 +64,7 @@ export function parseActivityFilters(
     entity: first(sp.entity).slice(0, 64),
     from: isValidDay(from) ? from : "",
     to: isValidDay(to) ? to : "",
-    page: Math.max(1, Math.floor(Number(first(sp.page))) || 1),
+    page: clampPage(first(sp.page)),
   };
 }
 
@@ -146,13 +159,25 @@ export async function fetchActivityFacets(
   return { actions: [...actions].sort(), entities: [...entities].sort() };
 }
 
-/** Full filtered set for CSV export, paged past the 1000-row cap. */
+/** Hard ceiling on export size (pages of 1000). Reaching it truncates rather than fails. */
+export const ACTIVITY_EXPORT_MAX_PAGES = 20;
+
+/**
+ * Filtered set for CSV export, paged past the 1000-row cap.
+ *
+ * On hitting the page ceiling this returns what it has (with `truncated: true`)
+ * instead of throwing. `activity_log` grows unbounded — nothing prunes it, unlike the
+ * 60-day `article_view_daily` sweep in /api/db-keepalive — so throwing turned the
+ * export from "works" into "permanently 500s" the moment the log crossed 20k rows.
+ * Rows come back newest-first, so a truncated export keeps the most recent window,
+ * which is the part an operator is actually after.
+ */
 export async function fetchAllActivityRows(
   sb: SupabaseClient,
   f: ActivityFilters,
-): Promise<ActivityRow[]> {
+): Promise<{ rows: ActivityRow[]; truncated: boolean }> {
   const all: ActivityRow[] = [];
-  for (let page = 0; page < 20; page++) {
+  for (let page = 0; page < ACTIVITY_EXPORT_MAX_PAGES; page++) {
     const from = page * 1000;
     const { data, error } = await applyFilters(
       sb.from("activity_log").select("id,action,entity_type,entity_id,summary,created_at"),
@@ -164,7 +189,7 @@ export async function fetchAllActivityRows(
     if (error) throw error;
     const rows = (data ?? []) as ActivityRow[];
     all.push(...rows);
-    if (rows.length < 1000) return all;
+    if (rows.length < 1000) return { rows: all, truncated: false };
   }
-  throw new Error("fetchAllActivityRows: exceeded 20-page runaway cap");
+  return { rows: all, truncated: true };
 }

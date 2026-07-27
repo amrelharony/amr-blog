@@ -140,6 +140,14 @@ async function ingest(body: Record<string, unknown>): Promise<NextResponse> {
       const def = categoryByLabel(p.category);
       if (def) revalidatePath(`/category/${def.slug}`);
     }
+    // Per-tag surfaces too. /feed/tag/<tag> 404s while a tag has no published
+    // articles and caches that for an hour (revalidate = 3600) — a feed reader that
+    // subscribed just before the tag's first article would keep getting the 404,
+    // which some readers treat as "feed gone" and auto-unsubscribe from.
+    for (const t of p.tags) {
+      revalidatePath(`/tag/${t}`);
+      revalidatePath(`/feed/tag/${t}`);
+    }
   }
 
   // 13. Post-response enrichment. `after()` runs once the 201 below has been

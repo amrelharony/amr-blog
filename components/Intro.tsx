@@ -85,6 +85,10 @@ export default function Intro() {
       if (cancelled) return;
 
       let cleanupVar: () => void = () => {};
+      // Detaches the global skip listeners + safety timer. Assigned once they exist;
+      // called both from wipe() and from teardown(), and safe to call twice
+      // (removeEventListener / clearTimeout are no-ops when already done).
+      let detachSkip: () => void = () => {};
       let finished = false;
       const wipe = () => {
         if (finished) return;
@@ -98,6 +102,10 @@ export default function Intro() {
           ease: "power4.inOut",
           onComplete: () => {
             setGone(true);
+            // The effect's deps are [] and setGone only makes this render null — it
+            // never unmounts — so without this the four window listeners and the
+            // safety timer stayed bound for the life of the document.
+            detachSkip();
             window.dispatchEvent(new Event("blog:intro-done"));
           },
         });
@@ -137,15 +145,19 @@ export default function Intro() {
       window.addEventListener("keydown", skip);
       const safety = window.setTimeout(wipe, 6000);
 
-      teardown = () => {
-        try {
-          cleanupVar();
-        } catch {}
+      detachSkip = () => {
         window.removeEventListener("click", skip);
         window.removeEventListener("wheel", skip);
         window.removeEventListener("touchstart", skip);
         window.removeEventListener("keydown", skip);
         window.clearTimeout(safety);
+      };
+
+      teardown = () => {
+        try {
+          cleanupVar();
+        } catch {}
+        detachSkip();
       };
     })();
 

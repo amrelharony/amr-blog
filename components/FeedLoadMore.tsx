@@ -45,17 +45,51 @@ export default function FeedLoadMore({
   const loadMoreRef = useRef<() => void>(() => {});
   // Synchronous in-flight guard: the `loading` state is async, so the sentinel observer
   // and a button click firing in the same tick both pass the state check and each advance
-  // the offset — skipping a whole page. A ref blocks the second call immediately.
+  // the offset - skipping a whole page. A ref blocks the second call immediately.
   const loadingRef = useRef(false);
+  // How many appended cards FeedAnimations has already been told about.
+  const announced = useRef(0);
 
+  // Reset when the feed identity changes. The App Router reuses this instance across
+  // /category/a -> /category/b and /tag/x -> /tag/y (same route file, only the dynamic
+  // segment differs) - the same hazard ArticleReader/TtsButton/ArticleEngagement key
+  // their effects on `slug` for. Without this the new feed inherited the previous
+  // one's pagination: the old page-2 cards stayed portalled into the grid, `offset`
+  // still pointed past them so the new feed's next page was skipped, `seen` suppressed
+  // any shared slug, and a previous hasMore===false hid Load More entirely.
+  // Adjusting state during render (React's documented prop-change pattern) rather than
+  // in an effect avoids committing one frame of the stale list.
+  const feedKey = `${category ?? ""} ${tag ?? ""}`;
+  const [prevFeedKey, setPrevFeedKey] = useState(feedKey);
+  if (prevFeedKey !== feedKey) {
+    setPrevFeedKey(feedKey);
+    setExtra([]);
+    setOffset(initialSlugs.length);
+    setHasMore(initialHasMore);
+    setLoading(false);
+  }
+
+  // The rest of the reset. Refs must NOT be written during render (React can discard
+  // a render, and the write wouldn't roll back), so the non-visual bookkeeping lands
+  // here — effects run after commit and before any click or observer callback can
+  // fire, so loadMore never sees the previous feed's values.
+  // Also re-queries the portal host: the server renders a fresh .lb-card-grid for the
+  // new segment, so a node captured on the previous page is detached and appended
+  // cards would render into nothing.
   useEffect(() => {
+    seen.current = new Set(initialSlugs);
+    announced.current = 0;
+    loadingRef.current = false;
     setGridHost(document.querySelector<HTMLElement>("#lbGrid .lb-card-grid"));
-    return onFeedSearching(setSearching);
-  }, []);
+    // initialSlugs is a fresh array on every render; feedKey is the real trigger, and
+    // re-running on identity alone would wipe `seen` after each append.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feedKey]);
+
+  useEffect(() => onFeedSearching(setSearching), []);
 
   // After new cards are committed to the DOM, let FeedAnimations re-run its
-  // reveals — appended .lb-reveal cards stay at opacity 0 otherwise.
-  const announced = useRef(0);
+  // reveals - appended .lb-reveal cards stay at opacity 0 otherwise.
   useEffect(() => {
     if (extra.length > announced.current) {
       announced.current = extra.length;

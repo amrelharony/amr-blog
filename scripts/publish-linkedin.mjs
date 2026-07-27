@@ -1,5 +1,7 @@
 // publish-linkedin.js — Publish scheduled Supabase posts to LinkedIn
-// Runs via GitHub Actions cron every 30 minutes
+// Runs via GitHub Actions cron hourly (.github/workflows/publish-linkedin.yml).
+// Keep MAX_AGE_HOURS comfortably above that interval: withinWindow() permanently
+// skips anything older, so a run missed by more than MAX_AGE_HOURS never posts.
 //
 // Required env vars:
 //   SUPABASE_URL, SUPABASE_SERVICE_KEY,
@@ -19,6 +21,11 @@ const LI_PERSON = process.env.LINKEDIN_PERSON_URN;
 const MAX_AGE_HOURS = Number(process.env.LINKEDIN_MAX_AGE_HOURS) || 6;
 const MAX_PER_RUN = Number(process.env.LINKEDIN_MAX_PER_RUN) || 5;
 let runBudget = MAX_PER_RUN;
+
+// Per-item failures are caught so one bad row can't abort the rest of the run — but
+// they must still fail the process, or the hourly workflow reports success while
+// nothing was posted (e.g. an expired access token 401s every single item).
+let failures = 0;
 
 function withinWindow(row) {
   const t = row.scheduled_at || row.created_at;
@@ -311,6 +318,7 @@ async function publishThoughts() {
       await sbUpdate('microblog', row.id, { published: true });
       console.log(`  Done: ${row.id}`);
     } catch (err) {
+      failures++;
       console.error(`  Failed thought ${row.id}: ${err.message}`);
     }
   }
@@ -358,6 +366,7 @@ async function publishArticles() {
       }
       console.log(`  Done: ${row.id}`);
     } catch (err) {
+      failures++;
       console.error(`  Failed article ${row.id}: ${err.message}`);
     }
   }
@@ -371,7 +380,10 @@ async function main() {
   await publishThoughts();
   await publishArticles();
 
-  console.log(`[${new Date().toISOString()}] Done.`);
+  console.log(`[${new Date().toISOString()}] Done.${failures ? ` ${failures} item(s) FAILED.` : ""}`);
+  if (failures) {
+    throw new Error(`${failures} item(s) failed to publish — see the per-item errors above`);
+  }
 }
 
 main().catch(err => {

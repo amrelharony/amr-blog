@@ -61,7 +61,11 @@ export function processEmbeds(html: string): string {
 
 /** Extract [^id] footnote refs/definitions and append a footnotes section. */
 export function processFootnotes(html: string): string {
-  const refs: Record<string, string> = {};
+  // Null-prototype: ids come from \w+ in agent content, so a ref like [^toString]
+  // would otherwise resolve through Object.prototype — `id in refs` reported true
+  // for an UNdefined footnote and esc() threw on the inherited function, 500-ing the
+  // article page and every feed that renders it.
+  const refs: Record<string, string> = Object.create(null);
   const refRegex = /\[\^(\w+)\]/g;
   // Bounded (\s{0,8}, body {0,8000}): the unbounded \s* + lazy body backtracked
   // quadratically on a `<p>[^x]:` + long-whitespace body with no close (ReDoS).
@@ -73,7 +77,7 @@ export function processFootnotes(html: string): string {
   });
 
   html = html.replace(refRegex, (_m, id: string) => {
-    if (!(id in refs)) return `[^${id}]`;
+    if (!Object.hasOwn(refs, id)) return `[^${id}]`;
     return `<sup><a href="#fn-${id}" class="lb-fn-ref" data-fn="${esc(id)}" data-fn-text="${esc(refs[id])}">${id}</a></sup>`;
   });
 

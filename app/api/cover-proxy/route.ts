@@ -36,15 +36,31 @@ export async function GET(req: NextRequest) {
     logEvent("coverproxy.fetch_failed", { stage: "fetch", message: e instanceof Error ? e.message : String(e) });
     return new Response("Failed to fetch image", { status: 502 });
   }
-  clearTimeout(timer);
-  if (imgRes.type === "opaqueredirect" || (imgRes.status >= 300 && imgRes.status < 400))
+  // NB: the timer stays armed until the body has been fully read (cleared in the
+  // finally below). Clearing it here — as soon as the response HEADERS arrived —
+  // left the streaming loop with no deadline at all, so a trickling upstream could
+  // hold this edge invocation open indefinitely under the 5 MB cap. ctrl.signal is
+  // wired to the body stream too, so a fire aborts the read and lands in the catch.
+  if (imgRes.type === "opaqueredirect" || (imgRes.status >= 300 && imgRes.status < 400)) {
+    clearTimeout(timer);
     return new Response("Redirect not allowed", { status: 403 });
-  if (!imgRes.ok) return new Response("Image not found", { status: 404 });
+  }
+  if (!imgRes.ok) {
+    clearTimeout(timer);
+    // Report the upstream class rather than flattening 5xx/403 into "not found".
+    const status = imgRes.status >= 500 ? 502 : 404;
+    return new Response(status === 502 ? "Upstream error" : "Image not found", { status });
+  }
 
   const ct = imgRes.headers.get("content-type") || "";
-  if (!ALLOWED_CT.test(ct)) return new Response("Unsupported content type", { status: 415 });
-  if (parseInt(imgRes.headers.get("content-length") || "0", 10) > MAX_BYTES)
+  if (!ALLOWED_CT.test(ct)) {
+    clearTimeout(timer);
+    return new Response("Unsupported content type", { status: 415 });
+  }
+  if (parseInt(imgRes.headers.get("content-length") || "0", 10) > MAX_BYTES) {
+    clearTimeout(timer);
     return new Response("Image too large (max 5MB)", { status: 413 });
+  }
 
   const reader = imgRes.body!.getReader();
   const chunks: Uint8Array[] = [];
@@ -65,6 +81,8 @@ export async function GET(req: NextRequest) {
   } catch (e) {
     logEvent("coverproxy.fetch_failed", { stage: "stream", message: e instanceof Error ? e.message : String(e) });
     return new Response("Failed to fetch image", { status: 502 });
+  } finally {
+    clearTimeout(timer);
   }
   const body = new Uint8Array(bytes);
   let offset = 0;

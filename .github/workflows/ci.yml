@@ -22,9 +22,17 @@ jobs:
           node-version: "22" # next 16 requires >= 20.9
           cache: npm
       - run: npm ci
-      # Fail only on high/critical advisories; add --omit=dev if dev-dep noise
-      # ever makes this flaky.
-      - run: npm audit --audit-level=high
+      # Fail only on high/critical advisories in what actually ships.
+      # --omit=dev is the escape hatch this comment used to reserve, now taken: the
+      # eslint toolchain pulls minimatch@3 -> brace-expansion@1.x, and the open
+      # brace-expansion advisory (GHSA-mh99-v99m-4gvg) is published with the range
+      # "<=5.0.7", which no 1.x release can ever satisfy. That is unfixable from here
+      # and is a lint-time glob matcher, not a production risk. Runtime deps are held
+      # to the same bar as before (currently 0 advisories at any level).
+      - run: npm audit --audit-level=high --omit=dev
+      # Non-blocking visibility for the dev-dependency advisories the gate skips.
+      - run: npm audit --audit-level=high || true
+        continue-on-error: true
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test:coverage

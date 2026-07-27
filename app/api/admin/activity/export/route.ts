@@ -19,12 +19,17 @@ export async function GET(req: NextRequest) {
   const f = parseActivityFilters(Object.fromEntries(req.nextUrl.searchParams.entries()));
   const sb = await createClient();
 
-  let rows;
+  let rows, truncated;
   try {
-    rows = await fetchAllActivityRows(sb, f);
+    ({ rows, truncated } = await fetchAllActivityRows(sb, f));
   } catch (e) {
     console.error("[admin/activity/export]", e);
     return Response.json({ error: "Export failed" }, { status: 500 });
+  }
+  if (truncated) {
+    console.warn(
+      `[admin/activity/export] truncated at ${rows.length} rows (page ceiling); narrow the date filter for the older window`,
+    );
   }
 
   const header = ["action", "entity_type", "entity_id", "summary", "created_at"].join(",");
@@ -38,6 +43,8 @@ export async function GET(req: NextRequest) {
     headers: {
       "Content-Type": "text/csv;charset=utf-8",
       "Content-Disposition": 'attachment; filename="activity.csv"',
+      // Lets the caller tell a complete export from a capped one without parsing the body.
+      "X-Export-Truncated": truncated ? "1" : "0",
     },
   });
 }

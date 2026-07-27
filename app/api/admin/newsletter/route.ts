@@ -18,6 +18,11 @@ export async function GET() {
       sb.rpc("get_recent_bulletins", { p_limit: 50 }),
       previewBulletin(),
     ]);
+    // Surface the RPC error instead of rendering `logs: []`. An empty history reads as
+    // "nothing was ever sent", which is precisely the state that invites an operator to
+    // fire a duplicate send — and 0015 revoked EXECUTE from anon/authenticated, so a
+    // grant regression is a live failure mode here, not a hypothetical one.
+    if (logsRes.error) throw logsRes.error;
     return NextResponse.json({ logs: logsRes.data || [], preview });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });

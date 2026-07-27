@@ -33,8 +33,15 @@ by a schema marker; it CANNOT read function bodies, so 0015's
 2026-07-08, **0011–0015 are all live** — 0011–0014 + embed function + backfills
 were confirmed via the probe, and 0015's `claim_pending_bulletin` sent_at fix was
 applied to prod on 2026-07-08 (the repo file had also been missing that stamp —
-now corrected). Rollout is complete; re-run the probe after any future schema
-change.
+now corrected).
+
+> ⚠ **0016, 0017 and 0018 are NOT applied yet.** They landed after the original
+> rollout and are `create or replace` / `if not exists`, so each is safe to paste
+> on its own, in numeric order, in the dashboard SQL editor. The probe does not
+> cover them (it detects migrations by schema marker and these three change
+> function bodies and add one index), so verify them by hand as noted below.
+> All three are pure fixes — the app runs correctly without them, just with the
+> bugs each one describes. See "Pending migrations" below.
 
 ### 1. Apply migrations in the Supabase dashboard (SQL editor)
 
@@ -55,6 +62,42 @@ Run in numeric order; each is idempotent (`if not exists` / `create or replace`)
      The repo file previously shipped WITHOUT the sent_at stamp — that one-line
      bug is now fixed in-file too. If re-applying to a fresh environment, this
      file is `create or replace` + idempotent grants, safe to run whole.
+
+### 1b. Pending migrations (0016–0018) — apply in order
+
+Not part of the original ten-phase rollout; each fixes a bug found in a later
+sweep. All are idempotent and independent.
+
+6. `db/migrations/0016_fix_trending_window.sql` — `get_trending_articles` spanned
+   `p_days + 1` calendar days (8 days for "Trending this week"), disagreeing with
+   the admin view-series chart for the same nominal window.
+   - Verify: `select count(*) from get_trending_articles(7, 5);` still returns rows,
+     and `pg_get_functiondef('public.get_trending_articles'::regproc)` contains `- 1)`.
+7. `db/migrations/0017_bulletin_subscribers_stable_order.sql` — adds the
+   `unsubscribe_token` tiebreaker to `get_bulletin_subscribers`. 0015 ordered by
+   `created_at` alone, which is not unique, so subscribers sharing a timestamp
+   (a bulk import) could be skipped or double-emailed at a page/batch boundary.
+   - ⚠ This supersedes the manual dashboard edit described in section 5/5 of
+     `scripts/rollout/upgrade-2026-07.sql`. Apply **this file** rather than
+     hand-editing the body — hand-editing reintroduces the unstable order. It keeps
+     the 0013 `frequency` filter and re-states 0015's grants.
+   - Verify: `pg_get_functiondef('public.get_bulletin_subscribers'::regproc)`
+     contains BOTH `frequency` and `unsubscribe_token asc`.
+8. `db/migrations/0018_chat_ip_rpc_lockdown_and_view_index.sql` — revokes the anon
+   EXECUTE on `check_chat_ip_rate_limit` (it takes the IP as an argument, so any
+   holder of the public anon key could burn a victim's daily quota), caps the key
+   length, and indexes `article_view_daily(day)`, which every read filters on but
+   no index covered.
+   - Deploy the app first or alongside: `app/api/chat/route.ts` now calls that RPC
+     with the service-role client. Either order is safe — an older deploy just logs
+     the error and fails open, exactly as it does when the RPC is absent.
+   - Verify: `select has_function_privilege('anon', 'public.check_chat_ip_rate_limit(text,integer)', 'execute');`
+     returns `false`, and `\d public.article_view_daily` lists `idx_article_view_daily_day`.
+
+Note: `scripts/rollout/upgrade-2026-07.sql` inlines only 0011–0014 (plus 0016's
+arithmetic). It does **not** contain 0015, 0017 or 0018 — on a fresh environment
+apply those three from `db/migrations/` as well, or the bulletin send fails on a
+missing `claim_pending_bulletin` and `get_bulletin_subscribers` stays anon-callable.
 
 ### 2. Deploy the embeddings Edge Function (Phase 4)
 

@@ -38,8 +38,11 @@ export default async function AdminActivity({
   const actionOpts = withCurrent(facets.actions, f.action);
   const entityOpts = withCurrent(facets.entities, f.entity);
 
-  const firstShown = count === 0 ? 0 : (f.page - 1) * ACTIVITY_PAGE_SIZE + 1;
-  const lastShown = (f.page - 1) * ACTIVITY_PAGE_SIZE + rows.length;
+  // Key both ends off rows.length, not count: a ?page= past the end comes back with
+  // no rows (and, on the PGRST103 path, count 0), which previously rendered nonsense
+  // like "Showing 0–100 of 0".
+  const firstShown = rows.length === 0 ? 0 : (f.page - 1) * ACTIVITY_PAGE_SIZE + 1;
+  const lastShown = rows.length === 0 ? 0 : (f.page - 1) * ACTIVITY_PAGE_SIZE + rows.length;
   const hasPrev = f.page > 1;
   const hasNext = f.page * ACTIVITY_PAGE_SIZE < count;
   const filtered = !!(f.action || f.entity || f.from || f.to);
