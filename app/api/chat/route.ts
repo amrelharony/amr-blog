@@ -61,15 +61,38 @@ export async function POST(req: NextRequest) {
   // Rate limit. These RPCs take NO user id — they resolve the caller via auth.uid()
   // off the cookie session (this client is cookie-aware), so passing p_user_id makes
   // PostgREST 404 on the overload and would block every request:
-  //   check_chat_rate_limit() · record_chat_usage(p_model, p_tokens)
-  const { data: rl, error: rlErr } = await supabase.rpc("check_chat_rate_limit");
+  //   check_chat_session_rate_limit() · record_chat_usage(p_model, p_tokens)
+  //
+  // check_chat_session_rate_limit (db/migrations/0019) increments-and-tests ATOMICALLY.
+  // Its predecessor check_chat_rate_limit() was a pure read of a counter that only moved
+  // when record_chat_usage ran — at the END of the stream below, 10-30s later — so N
+  // parallel POSTs from one session all saw the same pre-increment usage and all passed
+  // (~100 concurrent requests against daily_max 25). Same shape as the per-IP limiter:
+  // insert … on conflict … returning, tested against the cap.
+  //
+  // Deliberately the visitor's COOKIE client, NOT the service client 0018 requires for
+  // the IP limiter: this RPC takes no arguments and keys on auth.uid() from the signed
+  // session JWT, which a caller cannot forge for someone else (an IP argument, they can).
+  // Under service-role there is no session at all — auth.uid() is NULL, the RPC returns
+  // no rows, and every visitor would share one bucket.
+  let rlRpc = "check_chat_session_rate_limit";
+  let { data: rl, error: rlErr } = await supabase.rpc(rlRpc);
+  if (rlErr) {
+    // Migrations here are applied by hand (docs/upgrade-rollout.md), so 0019 may not be
+    // live yet on a given database. Fall back to the legacy read-only RPC instead of
+    // dropping the session limit altogether: still racy, but far better than unlimited.
+    logEvent("chat.rate_limit_rpc_error", { rpc: rlRpc, message: rlErr.message });
+    rlRpc = "check_chat_rate_limit";
+    ({ data: rl, error: rlErr } = await supabase.rpc(rlRpc));
+    if (rlErr) {
+      logEvent("chat.rate_limit_rpc_error", { rpc: rlRpc, message: rlErr.message });
+    }
+  }
   // Fail-open is deliberate, but a broken RPC would leave chat unlimited silently —
   // log every non-decision so the degradation is visible in the function logs.
-  if (rlErr) {
-    logEvent("chat.rate_limit_rpc_error", { rpc: "check_chat_rate_limit", message: rlErr.message });
-  } else if (!isDecision(rl)) {
+  if (!rlErr && !isDecision(rl)) {
     logEvent("chat.rate_limit_fallback", {
-      rpc: "check_chat_rate_limit",
+      rpc: rlRpc,
       shape: Array.isArray(rl) ? "array" : typeof rl,
     });
   }

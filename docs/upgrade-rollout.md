@@ -35,13 +35,13 @@ were confirmed via the probe, and 0015's `claim_pending_bulletin` sent_at fix wa
 applied to prod on 2026-07-08 (the repo file had also been missing that stamp —
 now corrected).
 
-> ⚠ **0016, 0017 and 0018 are NOT applied yet.** They landed after the original
+> ⚠ **0016 through 0019 are NOT applied yet.** They landed after the original
 > rollout and are `create or replace` / `if not exists`, so each is safe to paste
 > on its own, in numeric order, in the dashboard SQL editor. The probe does not
-> cover them (it detects migrations by schema marker and these three change
-> function bodies and add one index), so verify them by hand as noted below.
-> All three are pure fixes — the app runs correctly without them, just with the
-> bugs each one describes. See "Pending migrations" below.
+> cover them (it detects migrations by schema marker and these mostly change
+> function bodies, add one index and one table), so verify them by hand as noted
+> below. All four are pure fixes — the app runs correctly without them, just with
+> the bugs each one describes. See "Pending migrations" below.
 
 ### 1. Apply migrations in the Supabase dashboard (SQL editor)
 
@@ -63,7 +63,7 @@ Run in numeric order; each is idempotent (`if not exists` / `create or replace`)
      bug is now fixed in-file too. If re-applying to a fresh environment, this
      file is `create or replace` + idempotent grants, safe to run whole.
 
-### 1b. Pending migrations (0016–0018) — apply in order
+### 1b. Pending migrations (0016–0019) — apply in order
 
 Not part of the original ten-phase rollout; each fixes a bug found in a later
 sweep. All are idempotent and independent.
@@ -93,11 +93,33 @@ sweep. All are idempotent and independent.
      the error and fails open, exactly as it does when the RPC is absent.
    - Verify: `select has_function_privilege('anon', 'public.check_chat_ip_rate_limit(text,integer)', 'execute');`
      returns `false`, and `\d public.article_view_daily` lists `idx_article_view_daily_day`.
+9. `db/migrations/0019_chat_session_rate_limit_atomic.sql` — adds `chat_session_usage`
+   and `check_chat_session_rate_limit()`, an atomic increment-and-test replacement for
+   the per-session gate. `check_chat_rate_limit()` only *read* a counter that
+   `record_chat_usage` moves at the end of the SSE stream (10–30s later), so parallel
+   requests from one session all passed the same pre-increment check — ~100 concurrent
+   POSTs against a daily cap of 25 all got served. Mirrors 0009's upsert-and-return,
+   keyed on `auth.uid()` instead of an argument, so anon/authenticated keep EXECUTE
+   (a session id can't be forged for someone else's account; an IP argument can).
+   - Deploy order is free: `app/api/chat/route.ts` calls the new RPC and falls back to
+     `check_chat_rate_limit()` if it is absent, so an app deployed before this migration
+     keeps the old (racy) limit rather than losing the session cap.
+   - The caps (25/day, 100/week, 300/month, matching `DEFAULT_MAX` in
+     `lib/chat/rate-limit.ts`) are constants in the function body, not arguments — anon
+     can call it, so an argument would be a bypass. Edit the file and re-apply to tune.
+   - The old `check_chat_rate_limit()` and its dashboard-managed counters are left in
+     place; `record_chat_usage(p_model, p_tokens)` still runs for token accounting.
+   - Verify: `select * from check_chat_session_rate_limit();` from the SQL editor returns
+     **zero rows** (no `auth.uid()` there — that's the fail-open path), and after sending
+     a chat message as a visitor `select * from chat_session_usage order by day desc
+     limit 5;` shows `requests` climbing by one per message, immediately rather than at
+     end-of-stream.
 
 Note: `scripts/rollout/upgrade-2026-07.sql` inlines only 0011–0014 (plus 0016's
-arithmetic). It does **not** contain 0015, 0017 or 0018 — on a fresh environment
-apply those three from `db/migrations/` as well, or the bulletin send fails on a
-missing `claim_pending_bulletin` and `get_bulletin_subscribers` stays anon-callable.
+arithmetic). It does **not** contain 0015, 0017, 0018 or 0019 — on a fresh environment
+apply those four from `db/migrations/` as well, or the bulletin send fails on a
+missing `claim_pending_bulletin`, `get_bulletin_subscribers` stays anon-callable, and
+the chat session limit stays bypassable with concurrency.
 
 ### 2. Deploy the embeddings Edge Function (Phase 4)
 
