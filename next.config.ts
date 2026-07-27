@@ -14,14 +14,27 @@ const baseSecurityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
 ];
 
+// One id per build, handed to the service worker as /sw.js?v=… — it is what
+// namespaces (and therefore rotates) its caches on deploy, so it must be stable
+// for the life of a deployment and change when the deployment does. `env` below
+// inlines it into the client bundle at build time, which freezes the local
+// fallback too: `next start` and every request of a deployment see one value.
+const swVersion = (
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  process.env.GITHUB_SHA ||
+  `dev${Date.now().toString(36)}`
+).slice(0, 12);
+
 const nextConfig: NextConfig = {
+  env: { NEXT_PUBLIC_SW_VERSION: swVersion },
   async headers() {
     return [
       { source: "/:path*", headers: baseSecurityHeaders },
       { source: "/admin/:path*", headers: [{ key: "X-Frame-Options", value: "DENY" }] },
       {
         // Per the Next PWA guide: the SW itself must never be cached, so a new
-        // deploy's worker (with a bumped cache version) takes over immediately.
+        // deploy's worker (carrying the new ?v= cache namespace) takes over
+        // immediately. Query strings don't affect header matching.
         source: "/sw.js",
         headers: [
           { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
