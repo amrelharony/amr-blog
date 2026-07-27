@@ -327,17 +327,22 @@ end;
 $$;
 
 
--- ===== 5/5: MANUAL EDIT + self-audit — get_bulletin_subscribers ============
--- The body of get_bulletin_subscribers lives ONLY in the dashboard (like all
--- base RLS/RPC bodies in this project), so this file cannot CREATE OR REPLACE
--- it. You must edit it by hand, ONCE, in Database → Functions:
+-- ===== 5/5: self-audit — get_bulletin_subscribers ==========================
+-- SUPERSEDED: this section used to tell you to hand-edit the body in
+-- Database → Functions. Don't. `db/migrations/0017_bulletin_subscribers_stable_order.sql`
+-- now ships the whole function (frequency filter + the unsubscribe_token tiebreaker
+-- + 0015's grants) as a CREATE OR REPLACE — apply that file instead. Hand-editing
+-- reintroduces the unstable `order by created_at` alone, which can skip or
+-- double-email subscribers at a page/batch boundary.
 --
---     Add to its WHERE clause:
---         and coalesce(s.frequency, 'digest') = 'digest'
+-- Without the frequency filter, 'instant' subscribers are ALSO mailed by the
+-- biweekly digest (double-mailed). The block below audits the live body on every
+-- run of this file and raises a WARNING while either half is missing.
 --
--- Without the edit, 'instant' subscribers are ALSO mailed by the biweekly
--- digest (double-mailed). The block below audits the live body on every run
--- of this file and raises a WARNING while the edit is missing.
+-- NOTE: this file inlines migrations 0011-0014 only (plus 0016's window arithmetic
+-- in get_trending_articles). On a fresh environment you must ALSO apply 0015, 0017
+-- and 0018 from db/migrations/ — without 0015 the bulletin send fails on a missing
+-- claim_pending_bulletin(), and get_bulletin_subscribers stays anon-callable.
 
 do $$
 declare
@@ -351,12 +356,23 @@ begin
 
   if v_def is null then
     raise warning 'get_bulletin_subscribers() not found — newsletter schema missing?';
-  elsif v_def !~ 'frequency' then
-    raise warning e'get_bulletin_subscribers() does NOT filter on frequency yet.\n'
-      'Instant subscribers WILL be double-mailed by the digest until you add\n'
-      '    and coalesce(s.frequency, ''digest'') = ''digest''\n'
-      'to its WHERE clause (Database -> Functions -> get_bulletin_subscribers).';
   else
-    raise notice 'get_bulletin_subscribers() frequency filter present — OK';
+    if v_def !~ 'frequency' then
+      raise warning e'get_bulletin_subscribers() does NOT filter on frequency yet.\n'
+        'Instant subscribers WILL be double-mailed by the digest.\n'
+        'Fix: apply db/migrations/0017_bulletin_subscribers_stable_order.sql (it ships\n'
+        'the whole function body — do NOT hand-edit it in Database -> Functions).';
+    end if;
+    -- 0017: without a UNIQUE tiebreaker the ORDER BY is not a total order, so the
+    -- >1000-row Range paging in rpcAll and the offset-based batch resume in
+    -- lib/newsletter/send.ts can skip or double-send subscribers sharing a created_at.
+    if v_def !~ 'unsubscribe_token asc' then
+      raise warning e'get_bulletin_subscribers() has NO stable ORDER BY tiebreaker (0017).\n'
+        'Subscribers sharing a created_at can be skipped or double-emailed at a\n'
+        'page/batch boundary. Fix: apply db/migrations/0017_bulletin_subscribers_stable_order.sql';
+    end if;
+    if v_def ~ 'frequency' and v_def ~ 'unsubscribe_token asc' then
+      raise notice 'get_bulletin_subscribers() frequency filter + stable order present — OK';
+    end if;
   end if;
 end $$;

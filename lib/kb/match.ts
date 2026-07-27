@@ -20,7 +20,12 @@ export interface KBResult {
 const KB = kbData as KBEntry[];
 
 // ── Synonym groups (query expansion) ──
-const SYNONYMS: Record<string, Set<string>> = {};
+// Null-prototype: both maps below are indexed by strings derived from the visitor's
+// chat message (see the ngrams in matchQuery), so a plain `{}` resolves keys like
+// "constructor" and "__proto__" through Object.prototype. `SYNONYMS[ng]` then handed
+// scoreEntry a function/object that passed its truthiness check and blew up on
+// iteration ("syns is not iterable"), 500-ing /api/chat for that message.
+const SYNONYMS: Record<string, Set<string>> = Object.create(null);
 const _synGroups: string[][] = [
   ["pm", "project management", "pmp", "project manager", "pmi"],
   ["scrum", "agile", "sprint", "scrum master", "psm", "retrospective", "standup"],
@@ -53,7 +58,7 @@ _synGroups.forEach((group) => {
   });
 });
 
-const _keyFreq: Record<string, number> = {};
+const _keyFreq: Record<string, number> = Object.create(null);
 KB.forEach((e) => e.keys.forEach((k) => (_keyFreq[k] = (_keyFreq[k] || 0) + 1)));
 const _maxFreq = Math.max(1, ...Object.values(_keyFreq));
 

@@ -2,6 +2,7 @@
 // scoped to one tag (tags are free-form, so no generateStaticParams; ISR
 // caches each requested tag for an hour).
 import { createPublicClient } from "@/lib/supabase/public";
+import { pgTextArrayLiteral } from "@/lib/queries/articles";
 import { esc } from "@/lib/format";
 
 export const revalidate = 3600;
@@ -18,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ tag: st
     .from("longform_articles")
     .select("title,slug,excerpt,created_at,tags")
     .eq("published", true)
-    .contains("tags", [clean])
+    .contains("tags", pgTextArrayLiteral([clean]))
     .order("created_at", { ascending: false })
     .limit(50);
   // Throw on a DB error so a transient failure doesn't get cached as a 404 (which

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import { relTime } from "@/lib/microblog-format";
 
@@ -31,6 +32,7 @@ function set(v: unknown) {
 
 export default function ContinueReading() {
   const [items, setItems] = useState<Entry[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
     let cancelled = false;
@@ -111,9 +113,12 @@ export default function ContinueReading() {
           <div
             key={item.articleId}
             className="lb-continue-card"
-            onClick={() => {
-              window.location.href = `/p/${item.slug}`;
-            }}
+            // router.push, not window.location: the latter is a full document load, so
+            // clicking a Continue Reading card tore the app down and replayed the Intro
+            // overlay over the article — while the feed card beside it transitions
+            // instantly. (A <Link> wrapper would nest the remove <button> inside an
+            // anchor, so the card stays a click target and navigates imperatively.)
+            onClick={() => router.push(`/p/${item.slug}`)}
           >
             <button
               className="lb-continue-close"

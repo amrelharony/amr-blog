@@ -34,11 +34,16 @@ a.btn{display:inline-block;padding:12px 28px;background:#00e1ff;color:#0a0e17;fo
     { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } },
   );
 }
+// Bound every call, same as lib/newsletter/send.ts: an unbounded fetch lets a hung
+// Supabase connection hold the invocation to the platform ceiling.
+const RPC_TIMEOUT_MS = 10_000;
+
 async function rpc(fn: string, params: unknown) {
   return fetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
     method: "POST",
     headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify(params),
+    signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
   });
 }
 
@@ -47,7 +52,17 @@ export async function GET(req: NextRequest) {
   if (!isValidConfirmToken(token)) {
     return page("Invalid Link", `<div class="icon">⚠️</div><div class="title">Invalid Link</div><div class="sub">This confirmation link is missing or malformed.</div><a class="btn" href="${SITE}">Go to Blog</a>`);
   }
-  const res = await rpc("confirm_newsletter", { p_token: token });
+  // A transient network failure or the timeout above rejects here. Unhandled, that
+  // replaced this route's whole reason for existing — the styled result page — with a
+  // raw Next 500. Treat it as "couldn't confirm right now" and tell the user to retry:
+  // the link is still valid, so a second click succeeds.
+  let res: Response;
+  try {
+    res = await rpc("confirm_newsletter", { p_token: token });
+  } catch (e) {
+    logEvent("newsletter.confirm.rpc_error", { message: e instanceof Error ? e.message : String(e) });
+    return page("Try Again", `<div class="icon">⚠️</div><div class="title">Something Went Wrong</div><div class="sub">We couldn't confirm your subscription just now. Your link is still valid — please try it again in a moment.</div><a class="btn" href="${SITE}">Go to Blog</a>`);
+  }
   let body: unknown = null;
   try {
     body = await res.json();
@@ -70,7 +85,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { email, token } = await req.json();
+    // A malformed body is a client error, not ours — every sibling route in this repo
+    // catches the parse separately so it returns 400 rather than 500 "Internal error".
+    let payload: { email?: unknown; token?: unknown };
+    try {
+      payload = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    // The casts are load-bearing only for types; isValidConfirmRequest does the real
+    // runtime check (typeof + shape) on the very next line and 400s anything else.
+    const email = payload.email as string;
+    const token = payload.token as string;
     if (!isValidConfirmRequest(email, token)) {
       return NextResponse.json({ error: "Invalid email or token" }, { status: 400 });
     }

@@ -101,6 +101,24 @@ describe("processFootnotes", () => {
     const out = processFootnotes('<p>x[^q]</p><p>[^q]: uses "quotes" &amp; stuff</p>');
     expect(out).toContain("data-fn-text=\"uses &quot;quotes&quot; &amp;amp; stuff\"");
   });
+
+  // The ref map used to be a plain `{}`, so `id in refs` hit Object.prototype: an
+  // UNdefined ref named after a prototype member resolved to the inherited function,
+  // and esc() threw on it. renderArticleHtml has no try/catch at its call sites, so
+  // one such ref 500'd the article page AND every feed that renders it.
+  it.each(["toString", "constructor", "valueOf", "hasOwnProperty", "isPrototypeOf"])(
+    "treats an undefined ref named %s as literal text, not an inherited property",
+    (id) => {
+      const out = processFootnotes(`<p>A claim[^${id}] here.</p>`);
+      expect(out).toBe(`<p>A claim[^${id}] here.</p>`);
+    },
+  );
+
+  it("still resolves a definition whose id shadows a prototype member", () => {
+    const out = processFootnotes("<p>Claim[^toString]</p><p>[^toString]: Real source</p>");
+    expect(out).toContain('data-fn-text="Real source"');
+    expect(out).toContain('id="fn-toString"');
+  });
 });
 
 describe("ReDoS guards (these regexes run server-side on agent content at render + build)", () => {

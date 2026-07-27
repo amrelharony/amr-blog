@@ -141,7 +141,11 @@ export function mergeAnnotations(
   for (const [k, v] of Object.entries(current)) out[k] = [...v];
   for (const [articleId, anns] of Object.entries(incoming)) {
     if (!Array.isArray(anns)) continue;
-    if (!out[articleId]) out[articleId] = [];
+    // hasOwn, not truthiness: article ids come from imported JSON, so a key like
+    // "constructor" resolves through Object.prototype — the init was skipped and
+    // `.map` on the inherited function threw, bypassing validateImport's contract
+    // that a bad file yields a friendly error rather than a crash.
+    if (!Object.hasOwn(out, articleId)) out[articleId] = [];
     const seen = new Set(out[articleId].map((a) => a.id));
     for (const a of anns) {
       if (a?.id && !seen.has(a.id)) {
@@ -161,7 +165,9 @@ export function mergeHistory(
   const out: Record<string, ExportedHistoryEntry> = { ...current };
   for (const [id, inc] of Object.entries(incoming)) {
     if (!inc || typeof inc !== "object") continue;
-    const cur = out[id];
+    // hasOwn for the same reason as mergeAnnotations: a key named after an
+    // Object.prototype member would otherwise merge against an inherited function.
+    const cur = Object.hasOwn(out, id) ? out[id] : undefined;
     if (!cur) {
       out[id] = inc;
       continue;

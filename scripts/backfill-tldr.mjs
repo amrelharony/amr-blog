@@ -40,8 +40,19 @@ for (const [k, v] of Object.entries({ SUPA_URL, SERVICE_KEY, AI_KEY })) {
   }
 }
 
+// `--limit` with a missing or non-numeric value used to silently mean "0 rows"
+// (Number(undefined || 0)) or "unbounded" (NaN, which fails every >= comparison) —
+// both reported as a clean exit. A typo in the documented invocation must fail loudly.
 const LIMIT_ARG = process.argv.indexOf("--limit");
-const MAX_ROWS = LIMIT_ARG !== -1 ? Number(process.argv[LIMIT_ARG + 1] || 0) : Infinity;
+let MAX_ROWS = Infinity;
+if (LIMIT_ARG !== -1) {
+  const raw = process.argv[LIMIT_ARG + 1];
+  MAX_ROWS = Number(raw);
+  if (!Number.isSafeInteger(MAX_ROWS) || MAX_ROWS < 1) {
+    console.error(`ERROR: --limit needs a positive integer (got ${raw === undefined ? "nothing" : `"${raw}"`}).`);
+    process.exit(1);
+  }
+}
 const PAGE = 25;
 const PACE_MS = 3000; // ~20/min — polite to the shared chat nginx limits
 const MAX_TLDR = 500;

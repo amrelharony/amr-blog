@@ -117,9 +117,22 @@ function report(tokens, info) {
   console.log('  # only if you created a NEW app, also set LINKEDIN_CLIENT_ID / LINKEDIN_CLIENT_SECRET\n');
 }
 
+// `body` carries provider-supplied query values (error / error_description) straight
+// off the callback URL, so escape both — otherwise loading
+// http://localhost:8765/callback?error=<script>… while this one-shot server is
+// listening reflects that markup into the page.
+function escHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 function html(title, body) {
-  return `<!doctype html><meta charset="utf-8"><title>${title}</title>` +
-    `<body style="font:16px system-ui;margin:3rem"><h1>${title}</h1><p>${body}</p></body>`;
+  const t = escHtml(title);
+  return `<!doctype html><meta charset="utf-8"><title>${t}</title>` +
+    `<body style="font:16px system-ui;margin:3rem"><h1>${t}</h1><p>${escHtml(body)}</p></body>`;
 }
 
 const server = http.createServer(async (req, res) => {

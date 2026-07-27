@@ -39,7 +39,9 @@ export async function GET(request: NextRequest) {
   // Optional category filter (validated against the known labels).
   const catParam = request.nextUrl.searchParams.get("category");
   const category = catParam && CATEGORY_LABELS.includes(catParam) ? catParam : null;
-  // Optional tag filter (free-form; length-bounded, value-parameterized by PostgREST).
+  // Optional tag filter (free-form; length-bounded here, and quoted into the array
+  // literal by pgTextArrayLiteral in getArticlesByTag — postgrest-js does NOT escape
+  // the array form itself, so the quoting is what keeps a comma or brace honest).
   const tagParam = request.nextUrl.searchParams.get("tag");
   const tag = tagParam && tagParam.length <= 100 ? tagParam : null;
 

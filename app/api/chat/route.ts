@@ -6,6 +6,7 @@
 //     the client; the matched context is injected here.
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { matchQuery, buildContext, matchedCats } from "@/lib/kb/match";
 import { resolveLimits, rateLimitHeaders, isDecision } from "@/lib/chat/rate-limit";
 import { sanitize, validateHistory, buildUserContent, MAX_MSG_LEN } from "@/lib/chat/input";
@@ -87,7 +88,23 @@ export async function POST(req: NextRequest) {
   // fails open (allows) if absent/erroring — the fail-open-vs-closed choice is left
   // deliberate (availability over strictness). x-real-ip is set by the Vercel edge and
   // isn't client-spoofable; a global ceiling on the OpenClaw key covers many-IP abuse.
-  const { data: ipAllowed, error: ipErr } = await supabase.rpc("check_chat_ip_rate_limit", {
+  //
+  // Called with the SERVICE-ROLE client, not the visitor's session: p_ip is an argument,
+  // so while anon held EXECUTE anyone with the (public) anon key could spend a victim's
+  // 200/day straight from the REST endpoint and lock them out of chat, or write
+  // unbounded junk rows into chat_ip_usage. Only our server knows the real client IP, so
+  // only our server should be able to bill it. Migration 0018 revokes the anon grant;
+  // until it's applied both paths work, and if the service key is absent we fall back to
+  // the session client so the backstop degrades rather than disappearing.
+  let ipLimiter = supabase;
+  try {
+    ipLimiter = createServiceClient() as unknown as typeof supabase;
+  } catch (e) {
+    logEvent("chat.ip_limiter_service_client_unavailable", {
+      message: e instanceof Error ? e.message : String(e),
+    });
+  }
+  const { data: ipAllowed, error: ipErr } = await ipLimiter.rpc("check_chat_ip_rate_limit", {
     p_ip: clientIp,
   });
   if (ipErr) {
@@ -214,14 +231,19 @@ export async function POST(req: NextRequest) {
             ctrl.enqueue(encoder.encode("data: [DONE]\n\n"));
           } catch {}
         }
-        try {
-          ctrl.close();
-        } catch {}
         // Record even on abort — estTokens tracks partial output, so a client that
         // disconnects mid-stream still gets metered. A swallowed error here is exactly
         // the p_user_id-class regression this repo hit before, so surface it — but keep
         // the try/catch so an unexpected reject can't escape this finally as an unhandled
         // rejection out of the stream's start().
+        //
+        // This MUST run before ctrl.close(): closing ends the response body, and the
+        // serverless invocation's lifetime is tied to that. Metering issued afterwards
+        // races the freeze and silently drops — every dropped call is a completion
+        // OpenClaw billed that never reaches the counters check_chat_rate_limit reads.
+        // (after() is not an option here: it has to be registered in the request scope,
+        // not from inside the stream's start().) [DONE] is already enqueued above, so
+        // the client has the full answer and sees no added latency.
         try {
           const { error: usageErr } = await supabase.rpc("record_chat_usage", {
             p_tokens: tokensTotal || estTokens,
@@ -231,6 +253,9 @@ export async function POST(req: NextRequest) {
         } catch (e) {
           logEvent("chat.record_usage_failed", { message: e instanceof Error ? e.message : String(e) });
         }
+        try {
+          ctrl.close();
+        } catch {}
       }
     },
     // The client disconnecting cancels this stream. Without aborting the upstream

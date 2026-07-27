@@ -6,6 +6,21 @@ import type { Article, ArticleCard } from "@/lib/types";
 const CARD_COLUMNS =
   "id,title,slug,excerpt,created_at,tags,views,reactions,cover_image,series_name,category";
 
+/**
+ * Build a quoted Postgres text-array literal for `.contains()`.
+ *
+ * postgrest-js serializes the ARRAY form as `cs.{a,b}` by raw `value.join(",")`
+ * (postgrest-js `contains()`), with no quoting — so a tag is NOT parameterized the
+ * way the call sites used to assume. A tag containing a comma silently became two
+ * array elements ("has both tags" instead of the one literal tag), and a `{`/`}`
+ * produced a malformed array literal that PostgREST rejects — surfacing as a 500 on
+ * a public feed URL. Passing a STRING instead makes postgrest-js emit it verbatim,
+ * so we do the quoting ourselves: wrap in double quotes, backslash-escape `\` and `"`.
+ */
+export function pgTextArrayLiteral(values: string[]): string {
+  return `{${values.map((v) => `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(",")}}`;
+}
+
 /** Published articles for the feed, newest first (range-paged for load-more). */
 export async function getFeedArticles(limit = 50, offset = 0): Promise<ArticleCard[]> {
   const sb = createPublicClient();
@@ -225,7 +240,17 @@ export async function searchArticles(
     .eq("published", true)
     .or(`title.wfts.${q},excerpt.wfts.${q},content.wfts.${q}`);
   if (category) query = query.eq("category", category);
-  const { data, error } = await query.limit(limit);
+  // LIMIT without ORDER BY leaves the *selection* to heap order: Postgres stops the
+  // scan at the first `limit` matches, so on a query matching hundreds of bodies the
+  // title match that rankSearchResults would score highest is never fetched, and the
+  // same query can return a different set after a VACUUM or under a parallel scan.
+  // Ranking happens in the caller; this just has to pick a deterministic, sensible
+  // candidate set. Newest-first with the usual id tiebreaker matches every other list
+  // query in this file.
+  const { data, error } = await query
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(limit);
   if (error) throw error;
   return (data ?? []) as SearchableArticle[];
 }
@@ -291,7 +316,7 @@ export async function getArticlesByTag(
     .from("longform_articles")
     .select(CARD_COLUMNS)
     .eq("published", true)
-    .contains("tags", [tag])
+    .contains("tags", pgTextArrayLiteral([tag]))
     .order("created_at", { ascending: false })
     .order("id", { ascending: false }) // stable tiebreaker so offset paging can't skip/dupe on tied dates
     .range(offset, offset + limit - 1);
@@ -306,7 +331,7 @@ export async function getTagCount(tag: string): Promise<number> {
     .from("longform_articles")
     .select("id", { count: "exact", head: true })
     .eq("published", true)
-    .contains("tags", [tag]);
+    .contains("tags", pgTextArrayLiteral([tag]));
   if (error) throw error;
   return count ?? 0;
 }

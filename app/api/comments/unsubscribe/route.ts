@@ -57,13 +57,18 @@ export async function POST(req: NextRequest) {
 
   try {
     const sb = createServiceClient();
-    const { data } = await sb
+    const { data, error } = await sb
       .from("comment_subscriptions")
       .update({ unsubscribed_at: new Date().toISOString() })
       .eq("token", token)
       .is("unsubscribed_at", null)
       .select("id")
       .maybeSingle();
+    // supabase-js resolves (never rejects) on a PostgREST failure, so an unchecked
+    // `error` looks exactly like "no matching row". Telling someone their unsubscribe
+    // already happened when the write actually failed leaves them mailed with no way
+    // out — same rule as notify.ts's "a DB error must not look like 'already sent'".
+    if (error) throw error;
     if (!data) {
       return page("Already done", "<h1 style='font-size:22px'>Already done</h1><p style='color:#94a3b8'>This link was already used or has expired.</p>", 200);
     }

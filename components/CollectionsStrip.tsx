@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { getLists, type ReadingList } from "@/lib/collections";
 
 // Feed strip listing the visitor's non-empty collections (saved reading lists).
@@ -21,9 +22,12 @@ export default function CollectionsStrip() {
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {l.items.map((it) => (
-              <a key={it.articleId} href={`/p/${it.slug}`} className="lb-card-tag" style={{ textDecoration: "none", padding: "4px 10px" }}>
+              // next/link, like every other feed card (ArticleCardV2): a plain <a> is a
+              // full document load, which re-runs the Intro overlay animation over the
+              // article the reader just asked for.
+              <Link key={it.articleId} href={`/p/${it.slug}`} className="lb-card-tag" style={{ textDecoration: "none", padding: "4px 10px" }}>
                 {it.title || it.slug}
-              </a>
+              </Link>
             ))}
           </div>
         </div>
