@@ -37,6 +37,24 @@ describe("resolveLimits", () => {
     expect(r.allowed).toBe(false);
     expect(r.weekly_used).toBe(100);
   });
+
+  // check_chat_session_rate_limit() (db/migrations/0019) replaced the read-only
+  // check_chat_rate_limit() with an atomic increment-and-test. It `returns table`, so
+  // PostgREST delivers a one-row ARRAY of all six counters — and zero rows when there is
+  // no auth.uid() to key on, which must stay a fail-open, not a lockout.
+  it("resolves the atomic session RPC's row (returns table → one-row array)", () => {
+    const r = resolveLimits([
+      { allowed: true, daily_used: 1, daily_max: 25, weekly_used: 1, weekly_max: 100, monthly_used: 1, monthly_max: 300 },
+    ]);
+    expect(r.allowed).toBe(true);
+    expect(r.daily_used).toBe(1);
+    expect(rateLimitHeaders(r)["X-RateLimit-Monthly-Max"]).toBe("300");
+  });
+
+  it("fails open when the atomic session RPC returns no rows (auth.uid() was null)", () => {
+    expect(resolveLimits([]).allowed).toBe(true);
+    expect(isDecision([])).toBe(false); // → the route logs chat.rate_limit_fallback
+  });
 });
 
 describe("isDecision", () => {
