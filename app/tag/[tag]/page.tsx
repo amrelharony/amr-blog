@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getArticlesByTag, getTagCount } from "@/lib/queries/articles";
 import { CATEGORY_PAGE_SIZE } from "@/lib/constants";
+import { decodeRouteParam } from "@/lib/route-param";
 import ArticleCardV2 from "@/components/ArticleCardV2";
 import FeedAnimations from "@/components/FeedAnimations";
 import FeedLoadMore from "@/components/FeedLoadMore";
@@ -12,7 +13,7 @@ export const revalidate = 300;
 type Params = { params: Promise<{ tag: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
-  const { tag } = await params;
+  const tag = decodeRouteParam((await params).tag);
   return {
     title: `Tagged: ${tag}`,
     description: `Articles tagged "${tag}" by Amr Elharony.`,
@@ -21,7 +22,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 }
 
 export default async function TagPage({ params }: Params) {
-  const { tag } = await params;
+  // Decoded: on Vercel the param can arrive still percent-encoded, which matched
+  // no rows and cached a 404 for a real tag (see lib/route-param.ts).
+  const tag = decodeRouteParam((await params).tag);
   const [articles, total] = await Promise.all([
     getArticlesByTag(tag, CATEGORY_PAGE_SIZE, 0),
     getTagCount(tag),
