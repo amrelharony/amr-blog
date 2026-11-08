@@ -90,6 +90,9 @@ export default function WritePage() {
   // The slug the open article was loaded with, so a rename can revalidate the OLD
   // /p/<slug> path too (otherwise the old URL serves stale ISR content).
   const origSlugRef = useRef("");
+  // Likewise the tags it was loaded with: tag pages are cached for days, so a save
+  // revalidates the pages of tags it removed as well as the ones it kept or added.
+  const origTagsRef = useRef<string[]>([]);
 
   const loadList = useCallback(async () => {
     setListBusy(true);
@@ -148,6 +151,7 @@ export default function WritePage() {
     editSeq.current++; // supersede any in-flight startEdit
     skipPersist.current = true;
     origSlugRef.current = "";
+    origTagsRef.current = [];
     setForm({ ...EMPTY });
     setSlugLocked(false);
     setReviewUrl("");
@@ -180,6 +184,7 @@ export default function WritePage() {
       tldr: data.tldr || "",
     });
     origSlugRef.current = data.slug || "";
+    origTagsRef.current = data.tags || [];
     setLoadedStatus(data.published ? "live" : data.scheduled_at ? "scheduled" : "draft");
     setPreviewOn(false);
     setPreviewHtml("");
@@ -271,12 +276,14 @@ export default function WritePage() {
     setDraft(null);
   };
 
-  const revalidate = async (slug: string) => {
+  // `tags` refreshes those tag pages; `allTags` marks every tag page stale (bulk ops,
+  // whose rows don't carry tags here). See app/api/revalidate/route.ts.
+  const revalidate = async (slug: string, opts: { tags?: string[]; allTags?: boolean } = {}) => {
     try {
       await fetch("/api/revalidate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug }),
+        body: JSON.stringify({ slug, ...opts }),
       });
     } catch {
       /* non-fatal */
@@ -299,8 +306,11 @@ export default function WritePage() {
       return next;
     });
 
-  const afterBulk = async (note: string) => {
-    await revalidate(""); // global ISR refresh (no specific slug)
+  const afterBulk = async (note: string, touchesTagPages = false) => {
+    // Global ISR refresh (no specific slug). Publish/unpublish/delete change which
+    // articles a tag page lists; a category change doesn't, so it spares the
+    // ~9,300 tag pages a regeneration wave.
+    await revalidate("", { allTags: touchesTagPages });
     await logActivity(sb, "bulk", "article", null, note);
     setSelected(new Set());
     setListMsg(note);
@@ -317,7 +327,7 @@ export default function WritePage() {
     const { error } = await sb.from("longform_articles").update(row).in("id", ids);
     setListBusy(false);
     if (error) setListMsg("Failed: " + error.message);
-    else afterBulk(`${pub ? "Published" : "Unpublished"} ${ids.length}.`);
+    else afterBulk(`${pub ? "Published" : "Unpublished"} ${ids.length}.`, true);
   };
 
   const bulkCategory = async () => {
@@ -344,7 +354,7 @@ export default function WritePage() {
       } catch {
         /* ignore */
       }
-      afterBulk(`Deleted ${ids.length}.`);
+      afterBulk(`Deleted ${ids.length}.`, true);
     }
   };
 
@@ -428,7 +438,9 @@ export default function WritePage() {
         if (error) throw error;
         savedId = inserted?.id || "";
       }
-      await revalidate(slug);
+      // Old and new tags: a removed tag's page must drop the card, a new one add it.
+      const savedTags = row.tags as string[];
+      await revalidate(slug, { tags: [...new Set([...savedTags, ...origTagsRef.current])] });
       // On a slug rename, also revalidate the OLD path so /p/<oldslug> stops serving
       // stale ISR content (it will re-render and 404 since the row moved).
       if (form.id && origSlugRef.current && origSlugRef.current !== slug) await revalidate(origSlugRef.current);
@@ -455,6 +467,7 @@ export default function WritePage() {
       setMsg({ t: "Saved.", ok: true });
       setSlugLocked(true);
       origSlugRef.current = slug; // a later rename in the same session revalidates from here
+      origTagsRef.current = savedTags; // likewise a later retag
       skipPersist.current = true; // don't let the form update below re-create the draft
       setForm((f) => ({ ...f, slug, id: savedId }));
       loadList();
@@ -469,7 +482,9 @@ export default function WritePage() {
     if (!confirm("Delete this article? This cannot be undone.")) return;
     const { error } = await sb.from("longform_articles").delete().eq("id", id);
     if (!error) {
-      await revalidate(slug);
+      // del() is only reachable from the open editor, so origTagsRef is this
+      // article's stored tags; its tag pages must drop the card.
+      await revalidate(slug, { tags: origTagsRef.current });
       await logActivity(sb, "delete", "article", id, slug);
       try {
         localStorage.removeItem(draftKey(id)); // don't leave an orphaned autosave draft
