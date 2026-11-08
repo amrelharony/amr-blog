@@ -35,13 +35,14 @@ were confirmed via the probe, and 0015's `claim_pending_bulletin` sent_at fix wa
 applied to prod on 2026-07-08 (the repo file had also been missing that stamp —
 now corrected).
 
-> ⚠ **0016 through 0019 are NOT applied yet.** They landed after the original
+> ⚠ **0016 through 0020 are NOT applied yet.** They landed after the original
 > rollout and are `create or replace` / `if not exists`, so each is safe to paste
 > on its own, in numeric order, in the dashboard SQL editor. The probe does not
 > cover them (it detects migrations by schema marker and these mostly change
-> function bodies, add one index and one table), so verify them by hand as noted
-> below. All four are pure fixes — the app runs correctly without them, just with
-> the bugs each one describes. See "Pending migrations" below.
+> function bodies, add two indexes and one table), so verify them by hand as noted
+> below. All five are pure fixes — the app runs correctly without them, just with
+> the bugs (or, for 0020, the slow scans) each one describes. See "Pending
+> migrations" below.
 
 ### 1. Apply migrations in the Supabase dashboard (SQL editor)
 
@@ -63,7 +64,7 @@ Run in numeric order; each is idempotent (`if not exists` / `create or replace`)
      bug is now fixed in-file too. If re-applying to a fresh environment, this
      file is `create or replace` + idempotent grants, safe to run whole.
 
-### 1b. Pending migrations (0016–0019) — apply in order
+### 1b. Pending migrations (0016–0020) — apply in order
 
 Not part of the original ten-phase rollout; each fixes a bug found in a later
 sweep. All are idempotent and independent.
@@ -114,6 +115,18 @@ sweep. All are idempotent and independent.
      a chat message as a visitor `select * from chat_session_usage order by day desc
      limit 5;` shows `requests` climbing by one per message, immediately rather than at
      end-of-stream.
+
+10. `db/migrations/0020_longform_tags_gin_index.sql` — GIN index on
+    `longform_articles.tags`. Every tag surface (`/tag/<tag>`, `/feed/tag/<tag>`,
+    `/api/feed?tag=`) filters with `tags @> '{…}'`, and with no index each render
+    was a sequential scan. Crawlers hitting ~9,300 tag pages stacked those scans,
+    the likely cause of the Supabase 522 timeouts behind the Nov 2026 `/tag` 500 storm.
+    - Deploy order is free: the app's queries are unchanged; they just get faster.
+    - Before applying, check nothing equivalent exists under another name:
+      `select indexname, indexdef from pg_indexes where tablename = 'longform_articles';`
+      (skip the file if a `gin (tags)` index is already listed).
+    - Verify: `explain select id from longform_articles where published and tags @> '{"spaving"}';`
+      shows `Bitmap Index Scan on idx_longform_articles_tags`.
 
 Note: `scripts/rollout/upgrade-2026-07.sql` inlines only 0011–0014 (plus 0016's
 arithmetic). It does **not** contain 0015, 0017, 0018 or 0019 — on a fresh environment
