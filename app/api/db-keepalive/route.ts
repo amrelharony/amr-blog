@@ -14,8 +14,10 @@ const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 // (nothing here retries — the next scheduled invocation is the retry).
 const FETCH_TIMEOUT_MS = 8_000;
 
-// How far back step 3b looks for scheduled posts that just went live.
-const SCHEDULED_TAG_WINDOW_MS = 3 * 60 * 60 * 1000;
+// How far back step 3b looks for scheduled posts that just went live. Longer than
+// the every-3-days Vercel cron, so it still covers them when the hourly GitHub
+// Actions sweep isn't running (a post goes live at the first sweep after its time).
+const SCHEDULED_TAG_WINDOW_MS = 4 * 24 * 60 * 60 * 1000;
 
 export async function GET(req: NextRequest) {
   // Require the cron secret: Vercel auto-sends `Authorization: Bearer $CRON_SECRET` on
@@ -46,10 +48,9 @@ export async function GET(req: NextRequest) {
     revalidatePath("/thoughts");
     // 3b. ...including on their tag pages, which are cached for days and which
     //     nothing else revalidates for a scheduled publish. publish_scheduled_posts
-    //     keeps scheduled_at, so "published, scheduled_at within the window" is
-    //     the set that just went live. The window spans a few hourly sweeps (the
-    //     LinkedIn action calls this hourly) so one failed run is still covered;
-    //     a repeat only re-marks the same few pages stale. Best-effort.
+    //     keeps scheduled_at, so "published, scheduled_at within the window" covers
+    //     what just went live. Repeat sweeps re-mark the same few pages stale,
+    //     which costs nothing until a page is next visited. Best-effort.
     try {
       const since = new Date(Date.now() - SCHEDULED_TAG_WINDOW_MS).toISOString();
       const res = await fetch(
