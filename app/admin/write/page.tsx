@@ -277,8 +277,12 @@ export default function WritePage() {
   };
 
   // `tags` refreshes those tag pages; `allTags` marks every tag page stale (bulk ops,
-  // whose rows don't carry tags here). See app/api/revalidate/route.ts.
-  const revalidate = async (slug: string, opts: { tags?: string[]; allTags?: boolean } = {}) => {
+  // whose rows don't carry tags here); `slugs` refreshes more article pages (bulk
+  // ops). See app/api/revalidate/route.ts.
+  const revalidate = async (
+    slug: string,
+    opts: { tags?: string[]; allTags?: boolean; slugs?: string[] } = {},
+  ) => {
     try {
       await fetch("/api/revalidate", {
         method: "POST",
@@ -306,11 +310,18 @@ export default function WritePage() {
       return next;
     });
 
-  const afterBulk = async (note: string, touchesTagPages = false) => {
+  // Slugs of the selected rows. The selection only ever holds rows of the current
+  // list page: it is cleared on every page, search, status or category change.
+  const selectedSlugs = () => list.filter((a) => selected.has(a.id)).map((a) => a.slug);
+
+  const afterBulk = async (note: string, touchesTagPages = false, slugs: string[] = []) => {
     // Global ISR refresh (no specific slug). Publish/unpublish/delete change which
     // articles a tag page lists; a category change doesn't, so it spares the
-    // ~9,300 tag pages a regeneration wave.
-    await revalidate("", { allTags: touchesTagPages });
+    // ~9,300 tag pages a regeneration wave. Publish/unpublish/delete also make the
+    // selected articles' own pages appear or disappear, and those pages keep a
+    // render for an hour, so their slugs are refreshed too. Article pages don't
+    // show the category, so a category change sends none.
+    await revalidate("", { allTags: touchesTagPages, slugs });
     await logActivity(sb, "bulk", "article", null, note);
     setSelected(new Set());
     setListMsg(note);
@@ -320,6 +331,7 @@ export default function WritePage() {
   const bulkPublish = async (pub: boolean) => {
     const ids = [...selected];
     if (!ids.length) return;
+    const slugs = selectedSlugs();
     setListBusy(true);
     // Unpublish must also clear scheduled_at, else the publish_scheduled_posts cron
     // re-publishes the article on its next tick (matches single-article save('draft')).
@@ -327,7 +339,7 @@ export default function WritePage() {
     const { error } = await sb.from("longform_articles").update(row).in("id", ids);
     setListBusy(false);
     if (error) setListMsg("Failed: " + error.message);
-    else afterBulk(`${pub ? "Published" : "Unpublished"} ${ids.length}.`, true);
+    else afterBulk(`${pub ? "Published" : "Unpublished"} ${ids.length}.`, true, slugs);
   };
 
   const bulkCategory = async () => {
@@ -344,6 +356,7 @@ export default function WritePage() {
     const ids = [...selected];
     if (!ids.length) return;
     if (!confirm(`Delete ${ids.length} article(s)? This cannot be undone.`)) return;
+    const slugs = selectedSlugs();
     setListBusy(true);
     const { error } = await sb.from("longform_articles").delete().in("id", ids);
     setListBusy(false);
@@ -354,7 +367,7 @@ export default function WritePage() {
       } catch {
         /* ignore */
       }
-      afterBulk(`Deleted ${ids.length}.`, true);
+      afterBulk(`Deleted ${ids.length}.`, true, slugs);
     }
   };
 

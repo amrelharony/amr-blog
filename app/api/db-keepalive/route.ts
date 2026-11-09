@@ -46,24 +46,28 @@ export async function GET(req: NextRequest) {
     // 3. Refresh ISR so newly-published scheduled posts appear
     revalidatePath("/");
     revalidatePath("/thoughts");
-    // 3b. ...including on their tag pages, which are cached for days and which
-    //     nothing else revalidates for a scheduled publish. publish_scheduled_posts
-    //     keeps scheduled_at, so "published, scheduled_at within the window" covers
-    //     what just went live. Repeat sweeps re-mark the same few pages stale,
-    //     which costs nothing until a page is next visited. Best-effort.
+    // 3b. ...including their own /p/ pages and their tag pages, which nothing else
+    //     revalidates for a scheduled publish. The article page matters: a visit
+    //     before go-live (the editor's View button) caches a 404 for the page's
+    //     hour-long ISR window, and the LinkedIn post and subscriber email link
+    //     straight to it. publish_scheduled_posts keeps scheduled_at, so
+    //     "published, scheduled_at within the window" covers what just went live.
+    //     Repeat sweeps re-mark the same few pages stale, which costs nothing until
+    //     a page is next visited. Best-effort.
     try {
       const since = new Date(Date.now() - SCHEDULED_TAG_WINDOW_MS).toISOString();
       const res = await fetch(
-        `${SB_URL}/rest/v1/longform_articles?select=tags&published=eq.true` +
+        `${SB_URL}/rest/v1/longform_articles?select=slug,tags&published=eq.true` +
           `&scheduled_at=gte.${encodeURIComponent(since)}&scheduled_at=lte.${encodeURIComponent(ts)}&limit=50`,
         { headers: sbHeaders, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
       );
       if (res.ok) {
-        const rows = (await res.json()) as { tags: string[] | null }[];
+        const rows = (await res.json()) as { slug: string | null; tags: string[] | null }[];
+        for (const r of rows) if (r.slug) revalidatePath(`/p/${r.slug}`);
         revalidateTagPages(rows.flatMap((r) => r.tags || []));
       }
     } catch {
-      /* tag pages fall back to their TTL */
+      /* article and tag pages fall back to their TTL */
     }
     // 4. Prune the trending view-rollup past its 60-day window (service role —
     //    the table is RLS-locked with no policies; skip silently if unconfigured).

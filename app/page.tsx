@@ -15,8 +15,11 @@ import CollectionsStrip from "@/components/CollectionsStrip";
 import ReaderStats from "@/components/ReaderStats";
 import TrendingStrip from "@/components/TrendingStrip";
 
-// ISR — feed revalidates every 5 min and on-demand via /api/revalidate (tag 'articles').
-export const revalidate = 300;
+// ISR: the feed revalidates hourly, and on demand when an article is saved or
+// published (/api/articles, /api/revalidate) and after scheduled posts go live
+// (/api/db-keepalive, which the LinkedIn action calls hourly). The timer only
+// refreshes counts and the trending strip, which an hour's lag doesn't hurt.
+export const revalidate = 3600;
 
 function topTags(list: ArticleCard[], n = 10): string[] {
   const counts: Record<string, number> = {};

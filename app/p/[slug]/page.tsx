@@ -25,7 +25,17 @@ import ReadNext from "@/components/ReadNext";
 import ShareActions from "@/components/ShareActions";
 import TrendingStrip from "@/components/TrendingStrip";
 
-export const revalidate = 300;
+// An hour, not 5 min. In the week to 2026-11-08, /p/ pages were 94% of the
+// blog's ISR writes (276k units), much of it crawler bursts: one crawler made 78k
+// article requests in an hour, which at 300 s re-rendered each article up to 12
+// times. An hour caps that at once per article per hour. Content changes still
+// show at once, because every change to an article revalidates its page on
+// demand: single saves, renames and deletes (/api/revalidate from the editor),
+// /api/articles ingest, lib/ai/tags.ts, scheduled go-lives (/api/db-keepalive
+// step 3b) and bulk publish/unpublish/delete (slugs). What can lag by up to an
+// hour is the live data baked into the render: this article's view and reaction
+// counts, Read next/related, series navigation and the trending strip.
+export const revalidate = 3600;
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://blog.amrelharony.com";
 

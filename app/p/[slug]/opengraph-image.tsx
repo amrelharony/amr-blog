@@ -4,10 +4,10 @@ import { getArticleBySlug } from "@/lib/queries/articles";
 // Dynamic Open Graph card per article — a branded typographic share image
 // (no external image fetch / no custom font: next/og's bundled Geist fallback
 // is used, keeping generation reliable and under the 500KB satori budget).
-// Statically generated per slug (inherits the [slug] segment's
-// generateStaticParams) and refreshed on the same 5-min ISR window as the page.
+// Uses the same hour-long revalidate as the page. A share card that trails a
+// title edit by up to an hour is harmless.
 export const runtime = "nodejs";
-export const revalidate = 300;
+export const revalidate = 3600;
 export const alt = "Article preview — Amr Elharony";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
