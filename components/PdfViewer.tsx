@@ -105,9 +105,14 @@ export default function PdfViewer({ url, name }: { url: string; name?: string | 
         const pdfjs = await import("pdfjs-dist");
         if (cancelled) return; // unmounted during the dynamic import
         pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+        // rendererSrc (pdfjs >= 6.5's optional renderer worker) is left unset, so
+        // pages draw on the main thread. Enabling it means self-hosting and
+        // syncing build/pdf.renderer.min.mjs too, like the worker above.
 
-        // pdfjs v6 is eval-free and runs PDF scripting OFF by default, so a
-        // malicious agent-hosted PDF can't execute JS in the reader's page.
+        // PDF JavaScript only runs through pdf.js's scripting sandbox (the
+        // viewer's `enableScripting`, GHSA-hq66-cqwq-w95j). This component uses
+        // the core API only (getDocument + page.render) and never loads that
+        // sandbox, so an agent-hosted PDF's scripts are never executed. Keep it so.
         loadingTask = pdfjs.getDocument({ url });
         doc = await loadingTask.promise;
         if (cancelled) return;
