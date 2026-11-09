@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { logEvent } from "@/lib/log";
 import { secretMatches, bearerToken } from "@/lib/auth/secret";
+import { revalidateTagPages } from "@/lib/tag-pages";
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -12,6 +13,11 @@ const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 // Bound every Supabase fetch: a hung connection must not wedge the cron run
 // (nothing here retries — the next scheduled invocation is the retry).
 const FETCH_TIMEOUT_MS = 8_000;
+
+// How far back step 3b looks for scheduled posts that just went live. Longer than
+// the every-3-days Vercel cron, so it still covers them when the hourly GitHub
+// Actions sweep isn't running (a post goes live at the first sweep after its time).
+const SCHEDULED_TAG_WINDOW_MS = 4 * 24 * 60 * 60 * 1000;
 
 export async function GET(req: NextRequest) {
   // Require the cron secret: Vercel auto-sends `Authorization: Bearer $CRON_SECRET` on
@@ -40,6 +46,25 @@ export async function GET(req: NextRequest) {
     // 3. Refresh ISR so newly-published scheduled posts appear
     revalidatePath("/");
     revalidatePath("/thoughts");
+    // 3b. ...including on their tag pages, which are cached for days and which
+    //     nothing else revalidates for a scheduled publish. publish_scheduled_posts
+    //     keeps scheduled_at, so "published, scheduled_at within the window" covers
+    //     what just went live. Repeat sweeps re-mark the same few pages stale,
+    //     which costs nothing until a page is next visited. Best-effort.
+    try {
+      const since = new Date(Date.now() - SCHEDULED_TAG_WINDOW_MS).toISOString();
+      const res = await fetch(
+        `${SB_URL}/rest/v1/longform_articles?select=tags&published=eq.true` +
+          `&scheduled_at=gte.${encodeURIComponent(since)}&scheduled_at=lte.${encodeURIComponent(ts)}&limit=50`,
+        { headers: sbHeaders, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
+      );
+      if (res.ok) {
+        const rows = (await res.json()) as { tags: string[] | null }[];
+        revalidateTagPages(rows.flatMap((r) => r.tags || []));
+      }
+    } catch {
+      /* tag pages fall back to their TTL */
+    }
     // 4. Prune the trending view-rollup past its 60-day window (service role —
     //    the table is RLS-locked with no policies; skip silently if unconfigured).
     const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

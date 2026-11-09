@@ -129,9 +129,12 @@ export async function autoTagArticleFailOpen(articleId: string): Promise<void> {
       .eq("id", articleId);
     if (upErr) return;
 
-    // Refresh the article page so the new tags render (fail-open too).
+    // Refresh the article page so the new tags render, and the pages of the tags
+    // just added so they list it (tag pages are cached for days). Fail-open too.
     const { revalidatePath } = await import("next/cache");
+    const { revalidateTagPages } = await import("@/lib/tag-pages");
     revalidatePath(`/p/${data.slug}`);
+    revalidateTagPages(merged.filter((t) => !existing.includes(t)));
   } catch (e) {
     console.error("[auto-tag] fail-open:", articleId, e instanceof Error ? e.message : e);
   }

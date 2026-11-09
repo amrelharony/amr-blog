@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSeriesSiblings } from "@/lib/queries/articles";
+import { decodeRouteParam } from "@/lib/route-param";
 
 export const revalidate = 3600;
 
 type Params = { params: Promise<{ name: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
-  const { name } = await params;
+  const name = decodeRouteParam((await params).name);
   return {
     title: `Series: ${name}`,
     description: `All parts of the "${name}" series, in reading order.`,
@@ -17,7 +18,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 }
 
 export default async function SeriesPage({ params }: Params) {
-  const { name } = await params;
+  // Free-form like tags, so the same percent-encoding hazard (lib/route-param.ts).
+  const name = decodeRouteParam((await params).name);
   const parts = await getSeriesSiblings(name);
   if (parts.length === 0) notFound();
 

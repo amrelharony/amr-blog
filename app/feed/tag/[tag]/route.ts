@@ -3,6 +3,7 @@
 // caches each requested tag for an hour).
 import { createPublicClient } from "@/lib/supabase/public";
 import { pgTextArrayLiteral } from "@/lib/queries/articles";
+import { decodeRouteParam } from "@/lib/route-param";
 import { esc } from "@/lib/format";
 
 export const revalidate = 3600;
@@ -10,8 +11,9 @@ export const revalidate = 3600;
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://blog.amrelharony.com";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ tag: string }> }) {
-  const { tag } = await params;
-  const clean = (tag || "").trim().slice(0, 50);
+  // Decoded for the same reason as /tag/[tag]: the param can arrive percent-encoded.
+  const tag = decodeRouteParam((await params).tag || "");
+  const clean = tag.trim().slice(0, 50);
   if (!clean) return new Response("Not found", { status: 404 });
 
   const sb = createPublicClient();
