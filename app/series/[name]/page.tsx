@@ -6,6 +6,13 @@ import { decodeRouteParam } from "@/lib/route-param";
 
 export const revalidate = 3600;
 
+// Render each series on its first visit and cache it for the TTL above. Without
+// this the page is rendered on every request and `revalidate` only applies to
+// the fetch Data Cache (same as app/tag/[tag]/page.tsx).
+export async function generateStaticParams(): Promise<{ name: string }[]> {
+  return [];
+}
+
 type Params = { params: Promise<{ name: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
