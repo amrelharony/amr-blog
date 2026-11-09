@@ -19,6 +19,18 @@ import FeedLoadMore from "@/components/FeedLoadMore";
 // when a regeneration throws, instead of a 500.
 export const revalidate = 604800;
 
+// Required for the TTL above to cache the PAGE. Without generateStaticParams a
+// dynamic segment is rendered on every request ("ƒ" in the build table, served
+// `private, no-store`), and `revalidate` only sets the fetch Data Cache TTL: every
+// crawler hit still paid an invocation and a render. An empty list prerenders
+// nothing at build time and renders each tag on its first visit, then serves it
+// from Vercel's edge cache with no invocation until the TTL or an on-demand
+// revalidation (lib/tag-pages.ts) marks it stale. notFound() results are cached
+// the same way, so a junk tag costs one render per TTL.
+export async function generateStaticParams(): Promise<{ tag: string }[]> {
+  return [];
+}
+
 type Params = { params: Promise<{ tag: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
