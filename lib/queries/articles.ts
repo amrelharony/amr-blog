@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createPublicClient } from "@/lib/supabase/public";
 import { rankRelated } from "@/lib/ranking";
 import { sanitizeSearchQuery } from "@/lib/search";
@@ -42,8 +43,15 @@ const ARTICLE_COLUMNS =
   "source_url,published,views,reactions,scheduled_at,linkedin_posted,series_name," +
   "series_order,tldr,pdf_url,pdf_name";
 
-/** One published article by slug, or null. */
-export async function getArticleBySlug(slug: string): Promise<Article | null> {
+/**
+ * One published article by slug, or null.
+ *
+ * Wrapped in React `cache` because generateMetadata and the page both call it in
+ * one render. Next merges identical fetches only while they carry no AbortSignal,
+ * and the public client's timeout (lib/supabase/public.ts) puts one on every
+ * request. Without this, every article render would read the full row twice.
+ */
+export const getArticleBySlug = cache(async (slug: string): Promise<Article | null> => {
   const sb = createPublicClient();
   const { data, error } = await sb
     .from("longform_articles")
@@ -53,7 +61,7 @@ export async function getArticleBySlug(slug: string): Promise<Article | null> {
     .maybeSingle();
   if (error) throw error;
   return (data as unknown as Article) ?? null;
-}
+});
 
 // PostgREST caps a single response at ~1000 rows, so anything that must cover the
 // whole table (generateStaticParams, the sitemap) has to page explicitly.
