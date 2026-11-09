@@ -3881,7 +3881,7 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
     if (renderer) renderer.dispose();
   });
 
-  // Boot: create DOM, then load 3D immediately
+  // Boot: create DOM now; the 3D model loads on the first real input (see below)
   createDOM();
 
   // Animate mascot in sync with peripherals (trophy bar etc.) using GSAP
@@ -3914,9 +3914,30 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
     ensureVisible(9000);
   }
 
-  // Load Three.js + model on all viewports (mobile included, like the main site).
-  // Only reduced-motion falls back to the emoji launcher.
-  if (!A.RM) {
+  var EMOJI_LAUNCHER = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:48px;opacity:.6;">🤖</div><span class="mascot-float-label">ASK ELHARONYCLAW</span>';
+
+  // The 3D model (three.js plus the 2.6 MB /mascot.glb) waits for the first real
+  // input on the page: a pointer moving or pressing, a touch, a wheel turn or a
+  // key. Headless crawlers run this script but send no input. Before this gate,
+  // every page they rendered downloaded the GLB: 34k fetches and 25.8 GB in the
+  // week to 2026-11-08, 91% of the blog's Vercel bandwidth. Script-dispatched
+  // (untrusted) events don't count. The float and its chat are there from the
+  // start; only the model waits.
+  var HUMAN_INPUT = ['pointermove', 'pointerdown', 'touchstart', 'wheel', 'keydown'];
+  function onFirstHumanInput(cb) {
+    var opts = { capture: true, passive: true };
+    var done = false;
+    function fire(e) {
+      if (done || (e && e.isTrusted === false)) return;
+      done = true;
+      HUMAN_INPUT.forEach(function(t) { window.removeEventListener(t, fire, opts); });
+      cb();
+    }
+    HUMAN_INPUT.forEach(function(t) { window.addEventListener(t, fire, opts); });
+  }
+
+  // Three.js + model, on all viewports (mobile included, like the main site).
+  function load3D() {
     loadThreeExtensions().then(function() {
       initScene(floatEl);
       // No ?v= needed: /mascot.glb is served `max-age=0, must-revalidate` (Vercel's
@@ -3937,11 +3958,16 @@ body.zen-mode .mascot-float, body.zen-mode .mascot-panel { display: none !import
     }).catch(function(err) {
       console.warn('[Mascot] Load failed:', err);
       // Fallback: show emoji placeholder
-      floatEl.innerHTML = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:48px;opacity:.6;">\ud83e\udd16</div><span class="mascot-float-label">ASK ELHARONYCLAW</span>';
+      floatEl.innerHTML = EMOJI_LAUNCHER;
     });
+  }
+
+  // Reduced motion, and automation that identifies itself (navigator.webdriver),
+  // get the emoji launcher instead of the model.
+  if (!A.RM && !navigator.webdriver) {
+    onFirstHumanInput(load3D);
   } else {
-    // Reduced motion: emoji-only
-    floatEl.innerHTML = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:48px;opacity:.6;">\ud83e\udd16</div><span class="mascot-float-label">ASK ELHARONYCLAW</span>';
+    floatEl.innerHTML = EMOJI_LAUNCHER;
   }
 
   console.log('%c\ud83e\udd16 Mascot Assistant Loaded (Ultra Advanced: Physics + Emotions + Autonomy + Interactions)', 'background:#00e1ff;color:#000;padding:2px 5px;border-radius:3px;');
