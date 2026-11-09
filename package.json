@@ -15,28 +15,28 @@
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.2",
-    "dompurify": "^3.4.12",
+    "dompurify": "^3.4.17",
     "gsap": "^3.15.0",
     "highlight.js": "^11.11.1",
     "marked": "^18.0.4",
-    "next": "16.2.12",
-    "pdfjs-dist": "6.0.227",
+    "next": "16.4.5",
+    "pdfjs-dist": "6.5.438",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "sanitize-html": "^2.17.5"
+    "sanitize-html": "^2.18.1"
   },
   "comments": {
     "overrides": [
       "CI gates on `npm audit --audit-level=high --omit=dev`. next pins postcss to an exact",
-      "patch and sharp to a caret range that upstream has not yet moved off, so both stay",
-      "on versions with high advisories (postcss sourceMappingURL path traversal; sharp's",
-      "inherited libvips CVEs). Both bumps are same-major and API-compatible. Drop an entry",
-      "once next's own dependency range covers the patched version."
+      "patch (8.5.23), and that version's nanoid and source-map-js floors still admit",
+      "versions with high advisories (nanoid zero-size loop; source-map-js indexed-section",
+      "DoS). postcss 8.5.32 raises both floors past the fixes, and the override also keeps",
+      "one postcss copy now that sanitize-html wants ^8.5.27. Same-major, API-compatible.",
+      "Drop it once next's own postcss pin is >= 8.5.32."
     ]
   },
   "overrides": {
-    "postcss": "^8.5.23",
-    "sharp": "^0.35.3"
+    "postcss": "^8.5.32"
   },
   "devDependencies": {
     "@types/node": "^20",
@@ -45,7 +45,7 @@
     "@types/sanitize-html": "^2.16.1",
     "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^9",
-    "eslint-config-next": "16.2.12",
+    "eslint-config-next": "16.4.5",
     "typescript": "^5",
     "vitest": "^4.1.8"
   }
