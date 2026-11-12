@@ -366,6 +366,14 @@ export default async function ArticlePage({ params }: Params) {
                 >
                   <i className="fa-solid fa-calendar-check" /> ADPList
                 </a>
+                <a
+                  className="lb-author-link"
+                  href="https://agile.amrelharony.com"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <i className="fa-solid fa-toolbox" /> Agile Toolkit
+                </a>
               </div>
             </div>
           </div>
